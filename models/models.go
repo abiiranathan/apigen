@@ -9,7 +9,7 @@ const (
 
 type (
 	User struct {
-		ID       int64   `json:"id" gorm:"autoIncrement"`
+		ID       int     `json:"id" gorm:"autoIncrement"`
 		Name     string  `json:"name" gorm:"default:''"`
 		Age      int     `json:"age"`
 		Discount float64 `json:"discount" gorm:"constraint:positive_discount CHECK (discount > 0)"`

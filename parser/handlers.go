@@ -171,10 +171,11 @@ func (h *Handlers) Create{{.Model}}(options ...{{.SvcPkgName}}.Option) func(c *f
 	}
 }
 
+
 func (h *Handlers) Get{{.Model}}(options ...{{.SvcPkgName}}.Option) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		{{$ident}}Id := {{$pkType}}(GetParam(c, "id"))
-		{{$ident}}, err := h.svc.{{.Model}}Service.Get(int64({{$ident}}Id), options...)
+		{{$ident}}, err := h.svc.{{.Model}}Service.Get({{$ident}}Id, options...)
 		if err != nil{
 			return err
 		}

@@ -609,7 +609,7 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
 
 	// Retrieve total count of records
 	var totalCount int64
-	if err := repo.DB.Model(&models.User{}).Count(&totalCount).Error; err != nil {
+	if err := repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
 

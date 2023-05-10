@@ -9,7 +9,6 @@ import (
 	"time"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -39,7 +38,7 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel) (
 	// ping database
 	err = ping(db)
 	if err != nil {
-		return nil, fmt.Errorf("ping(): %w", err)
+		return nil, fmt.Errorf("ping(): %v", err)
 	}
 
 	// Use a connection pool

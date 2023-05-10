@@ -3,4 +3,8 @@
 *.db
 *.sqlite3
 cmd/apigen/apigen
+cmd/apigen/services
+cmd/apigen/handlers
+cmd/apigen/apigen.toml
+
 api.http
