@@ -53,11 +53,11 @@ func main() {
 
 	cfg, err := config.LoadConfig(configFileName)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	if err := parser.GenerateCode(cfg); err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 }
