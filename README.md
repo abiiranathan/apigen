@@ -19,8 +19,10 @@ In short, it creates a complete REST API given a package where your models are. 
 
 ## Installation
 
+### As a CLI tool
+
 ```console
-go install github.com/abiiranathan/apigen@latest
+go install github.com/abiiranathan/apigen/cmd/apigen@latest
 ```
 
 ### As a library
