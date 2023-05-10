@@ -1,0 +1,10 @@
+RootPkg='github.com/abiiranathan/apigen'
+
+[Models]
+Pkg='github.com/abiiranathan/apigen/models'
+Skip=[]
+
+[Output]
+OutDir='.'
+ServiceName='services'
+HandlersName='handlers'
