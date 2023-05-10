@@ -22,7 +22,7 @@ In short, it creates a complete REST API given a package where your models are. 
 ### As a CLI tool
 
 ```console
-go install github.com/abiiranathan/apigen/cmd/apigen@latest
+go install github.com/abiiranathan/apigen@latest
 ```
 
 ### As a library

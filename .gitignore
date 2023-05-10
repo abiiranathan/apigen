@@ -2,9 +2,8 @@
 .vscode
 *.db
 *.sqlite3
-cmd/apigen/apigen
-cmd/apigen/services
-cmd/apigen/handlers
+services
+handlers
 cmd/apigen/apigen.toml
-
+apigen
 api.http
