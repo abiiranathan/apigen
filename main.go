@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/abiiranathan/apigen/config"
 	"github.com/abiiranathan/apigen/enums"
@@ -48,9 +49,8 @@ var (
 	generateOnlyServices bool
 	configFileName       string
 	generateEnums        bool
-
-	tsTypesPath string
-
+	pgtypesPath          string
+	tsTypesPath          string
 	// Alternative pkg for enums (if different from models pkg specified in config file.)
 	enumsPkg string
 )
@@ -75,6 +75,7 @@ func init() {
 	flag.BoolVar(&generateOnlyServices, "services", false, "Generate only services.")
 	flag.BoolVar(&generateEnums, "enums", true, "Generate enums code present in the package.")
 	flag.StringVar(&enumsPkg, "enums-pkg", "", "Alternative pkg for enums.")
+	flag.StringVar(&pgtypesPath, "pgtypes", "", "File path to write the sql for the postgres enums. If empty, no sql is written")
 	flag.StringVar(&tsTypesPath, "typescript", "", "Generate typescript types in this file.")
 }
 
@@ -100,9 +101,18 @@ func main() {
 		if enumsPkg != "" {
 			packageName = enumsPkg
 		}
-		err = enums.GenerateEnums(packageName)
+		sql, err := enums.GenerateEnums(packageName)
 		if err != nil {
 			log.Panicln(err)
+		}
+
+		if pgtypesPath != "" {
+			// Create intermediate dirs if not exists
+			dirname := filepath.Dir(pgtypesPath)
+			if err := os.MkdirAll(dirname, 0755); err != nil {
+				log.Fatalf("error creating directory: %s: %v\n", dirname, err)
+			}
+			os.WriteFile(pgtypesPath, []byte(sql), 06400)
 		}
 	}
 
