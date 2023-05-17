@@ -146,8 +146,10 @@ type Handlers struct {
 	svc *{{.SvcPkgName}}.Service
 }
 
-
-
+// Create a new handler instance for routing.
+// All requests are validated using the go validator/v10 pkg.
+// The default tag is validate. Call handlers.DefaultValidator.SetTagName(tagName)
+// to change the validation tag for your structs.
 func New(db *gorm.DB, svc *{{.SvcPkgName}}.Service) *Handlers{
 	return &Handlers{db: db, svc:svc}
 }

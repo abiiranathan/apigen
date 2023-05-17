@@ -38,7 +38,7 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel) (
 	// ping database
 	err = ping(db)
 	if err != nil {
-		return nil, fmt.Errorf("ping(): %v", err)
+		return nil, fmt.Errorf("ping(): %%v", err)
 	}
 
 	// Use a connection pool
