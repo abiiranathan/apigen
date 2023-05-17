@@ -21,6 +21,12 @@ type Config struct {
 		HandlersName string `toml:"HandlersName"` // simple name for the handlers default: handlers
 		OutDir       string `toml:"OutDir"`       // Directory where to create new packages: default "."
 	} `toml:"Output"`
+	Overrides Overrides `toml:"overrides"`
+}
+
+type Overrides struct {
+	Types  map[string]string `toml:"types"`
+	Fields map[string]string `toml:"fields"`
 }
 
 func LoadConfig(path string) (*Config, error) {

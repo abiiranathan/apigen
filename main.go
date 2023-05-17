@@ -129,6 +129,6 @@ func main() {
 		}
 		meta := parser.Parse(cfg.Models.Pkg)
 		mapMeta := parser.Map(meta)
-		typescript.GenerateTypescriptInterfaces(f, mapMeta)
+		typescript.GenerateTypescriptInterfaces(f, mapMeta, cfg.Overrides)
 	}
 }

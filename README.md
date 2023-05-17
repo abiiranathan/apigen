@@ -1,16 +1,15 @@
 # apigen
 
-`apigen` is a tool written in go that parses go structs and generates complete REST APIs
-based on [GORM](https://gorm.io) ORM.
+`apigen` is a tool written in go that parses go structs and generates complete REST APIs based on [GORM](https://gorm.io) ORM.
 
-In short, it creates a complete REST API given a package where your models are. This avoid repetition since the structure of most services we build is similar, tedious and boring.
+In short, it creates a complete REST API given a package where your models are. This avoids repetition since the structure of most services we build is similar, tedious and boring.
 
 ## Features
 
 - generates services for all structs in your models unless skipped in the configuration file(`apigen.toml`)
 - Generates handler functions that call the underlying services for you.
 - Wires routes for all your handlers.
-- Automatic struct validation using the `go-validator/v10` package.
+- Automatic struct validation using the `go-validator/v10` package with default tag of `validate`.
 - Created Postgres database connection helper with sane defaults.
 - Creates pagination handlers for your by default.
 - Preloads all relationships(even nested relationships - for now) by default. Because the parser knows foreign keys and tree, we are able to do that for all `foreignKeys` and `many2many` fields.

@@ -127,7 +127,29 @@ func QuoteEnums(values []string) string {
 	return strings.Join(quoted, ",")
 }
 
+// Passes data to the string template that is executed into w.
+func parseTemplate(w io.Writer, data templateData) error {
+	tmpl, err := template.New("tmpl").Funcs(template.FuncMap{
+		"toCamelCase": func(s string) string {
+			return strcase.ToCamel(enCaser.String(s))
+		},
+		"ToSnakeCase": func(s string) string {
+			return strcase.ToSnake(enCaser.String(s))
+		},
+	}).Parse(templateString)
+	if err != nil {
+		return fmt.Errorf("error parsing template: %w", err)
+	}
+
+	if err := tmpl.Execute(w, data); err != nil {
+		return fmt.Errorf("error executing template: %w", err)
+	}
+
+	return nil
+}
+
 // For all enumerated constants, generate enums that satisfy the Enummer interface
+// suffix is appended to each filename e.g Uses _enum by default.
 func GenerateEnums(pkgName string, suffix ...string) error {
 	if len(suffix) == 0 {
 		suffix = append(suffix, "_enum")
@@ -174,28 +196,6 @@ func GenerateEnums(pkgName string, suffix ...string) error {
 			}
 		}
 	}
-	return nil
-
-}
-
-// Passes data to the string template that is executed into w.
-func parseTemplate(w io.Writer, data templateData) error {
-	tmpl, err := template.New("tmpl").Funcs(template.FuncMap{
-		"toCamelCase": func(s string) string {
-			return strcase.ToCamel(enCaser.String(s))
-		},
-		"ToSnakeCase": func(s string) string {
-			return strcase.ToSnake(enCaser.String(s))
-		},
-	}).Parse(templateString)
-	if err != nil {
-		return fmt.Errorf("error parsing template: %w", err)
-	}
-
-	if err := tmpl.Execute(w, data); err != nil {
-		return fmt.Errorf("error executing template: %w", err)
-	}
-
 	return nil
 }
 

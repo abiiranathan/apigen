@@ -41,5 +41,9 @@ func (e Sex) Value() (driver.Value, error) {
 }
 
 func (e Sex) DatabaseType() string {
-	return "Sex"
+	return "sex"
+}
+
+func (e Sex) GormDataType() string {
+	return "sex"
 }

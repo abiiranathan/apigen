@@ -11,3 +11,11 @@ Skip=[]
 OutDir='.'
 ServiceName='services'
 HandlersName='handlers'
+
+[overrides]
+  [overrides.types]
+    Sex='"Male" | "Female"'
+
+  [overrides.fields]
+    gender = 'Sex'
+    

@@ -1,10 +1,12 @@
 package typescript
 
 import (
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
 
+	"github.com/abiiranathan/apigen/config"
 	"github.com/abiiranathan/apigen/parser"
 )
 
@@ -22,12 +24,32 @@ func getJSONFieldName(tag string) string {
 	return ""
 }
 
-// Generate typescript interfaces given the map of parser StructMeta.
-// Generated code is written to w.
-func GenerateTypescriptInterfaces(w io.Writer, inputs map[string]parser.StructMeta) {
+// Helper recursive method to generate the typescript types.
+// If recursive, do not recreate the override types.
+func generateInterfaces(
+	output io.Writer,
+	inputs map[string]parser.StructMeta,
+	overrides config.Overrides,
+	recursive bool,
+	generated map[string]bool,
+) {
+	// Code to generate only once.
+	if !recursive {
+		// Create custom override types
+		for key, value := range overrides.Types {
+			output.Write([]byte(fmt.Sprintf("type %s = %s\n\n", key, value)))
+		}
+
+	}
+
 	for _, input := range inputs {
 		// skip structs with empty fields
 		if len(input.Fields) == 0 {
+			continue
+		}
+
+		// Check if already generated
+		if _, exists := generated[input.Name]; exists {
 			continue
 		}
 
@@ -44,7 +66,7 @@ func GenerateTypescriptInterfaces(w io.Writer, inputs map[string]parser.StructMe
 				continue
 			}
 
-			// If json tag is missing, user exact FieldName
+			// If json tag is missing, use exact FieldName
 			if fieldName == "" {
 				fieldName = f.Name
 			}
@@ -53,6 +75,13 @@ func GenerateTypescriptInterfaces(w io.Writer, inputs map[string]parser.StructMe
 			builder.WriteRune('\t')
 			builder.WriteString(fieldName)
 
+			// Check if there is an override for this field
+			if overrideType, ok := overrides.Fields[fieldName]; ok {
+				builder.WriteString(": ")
+				builder.WriteString(overrideType + ";\n")
+				continue
+			}
+
 			// Ignore pointer
 			f.Type = strings.TrimPrefix(f.Type, "*")
 
@@ -60,7 +89,7 @@ func GenerateTypescriptInterfaces(w io.Writer, inputs map[string]parser.StructMe
 				// Get the element type of the slice or array
 				elementType := f.Type[strings.IndexByte(f.Type, ']')+1:]
 				if input, ok := inputs[elementType]; ok {
-					GenerateTypescriptInterfaces(w, map[string]parser.StructMeta{input.Name: input})
+					generateInterfaces(output, map[string]parser.StructMeta{input.Name: input}, overrides, true, generated)
 					builder.WriteString(": ")
 					builder.WriteString(input.Name)
 					builder.WriteString("[];")
@@ -72,7 +101,7 @@ func GenerateTypescriptInterfaces(w io.Writer, inputs map[string]parser.StructMe
 				// Check if f.Type references a struct in the inputs map
 				if structMeta, ok := inputs[f.Type]; ok {
 					// Recursively generate interface for referenced struct
-					GenerateTypescriptInterfaces(w, map[string]parser.StructMeta{f.Type: structMeta})
+					generateInterfaces(output, map[string]parser.StructMeta{f.Type: structMeta}, overrides, true, generated)
 					builder.WriteString(": ")
 					builder.WriteString(structMeta.Name)
 					builder.WriteString(";")
@@ -83,8 +112,20 @@ func GenerateTypescriptInterfaces(w io.Writer, inputs map[string]parser.StructMe
 			builder.WriteString("\n")
 		}
 		builder.WriteString("}\n\n")
-		w.Write([]byte(builder.String()))
+		output.Write([]byte(builder.String()))
+		generated[input.Name] = true
 	}
+}
+
+// Generate typescript interfaces given the map of parser StructMeta.
+// Generated code is written to w.
+func GenerateTypescriptInterfaces(
+	output io.Writer,
+	inputs map[string]parser.StructMeta,
+	overrides config.Overrides,
+) {
+	generated := make(map[string]bool)
+	generateInterfaces(output, inputs, overrides, false, generated)
 }
 
 // Write typescript field type based on fieldType to builder.
