@@ -32,7 +32,25 @@ go get github.com/abiiranathan/apigen
 
 ## Usage
 
-Initialize project and create a configuration file `apigen.toml`
+### Help
+
+```bash
+apigen -h
+apigen - The go API generator. See https://github.com/abiiranathan/apigen
+
+Usage: apigen [options]
+
+Options:
+  -config         Path to config filename. (Default: apigen.toml)
+  -enums          Generate enums code present in the package. (Default: true)
+  -enums-pkg      Alternative pkg for enums. (Default: "")
+  -init           Initialize project and generate apigen.toml (Default: false)
+  -services       Generate only services. (Default: false)
+  -typescript     Generate typescript types in this file. (Default: "")
+
+```
+
+#### Initialize project and create a configuration file `apigen.toml`
 
 ```console
 apigen init
@@ -40,7 +58,7 @@ apigen init
 
 The configuration file has the following format:
 
-```txt
+```toml
 # Note that toml(v2) requires single quotes for strings
 
 # This the path containing your go.mod
@@ -63,6 +81,15 @@ ServiceName='services'
 # Name for your handlers package
 # Do not use routes.go (a routes.go file is generated along in the same folder.)
 HandlersName='handlers'
+
+# Overrides for enumerated constants
+# These will be used for the typescript fields.
+[overrides]
+  [overrides.types]
+    Sex='"Male" | "Female"'
+
+  [overrides.fields]
+    gender = 'Sex'
 ```
 
 ## Generate code
