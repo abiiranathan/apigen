@@ -53,6 +53,10 @@ func generateInterfaces(
 			continue
 		}
 
+		// Mark as generated here before calling recursive functions below
+		// Otherwise, produces infinite recursion and panics.
+		generated[input.Name] = true
+
 		builder := strings.Builder{}
 		builder.WriteString(`interface `)
 		builder.WriteString(input.Name)
@@ -113,7 +117,6 @@ func generateInterfaces(
 		}
 		builder.WriteString("}\n\n")
 		output.Write([]byte(builder.String()))
-		generated[input.Name] = true
 	}
 }
 

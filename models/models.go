@@ -34,4 +34,16 @@ type (
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
 	}
+
+	Question struct {
+		ID       int       `json:"id"`
+		Comments []Comment `json:"comments"`
+	}
+
+	// Test recursion
+	Comment struct {
+		ID         int       `json:"id"`
+		QuestionID int       `json:"question_id"`
+		Comments   []Comment `json:"comments"`
+	}
 )

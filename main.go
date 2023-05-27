@@ -92,7 +92,7 @@ func main() {
 	// Load configuration file
 	cfg, err := config.LoadConfig(configFileName)
 	if err != nil {
-		log.Panicln(err)
+		log.Fatalln(err)
 	}
 
 	// Generate code for enumerated constants
@@ -103,7 +103,7 @@ func main() {
 		}
 		sql, err := enums.GenerateEnums(packageName)
 		if err != nil {
-			log.Panicln(err)
+			log.Fatalln(err)
 		}
 
 		if pgtypesPath != "" {
@@ -121,14 +121,14 @@ func main() {
 		metadata := parser.Parse(cfg.Models.Pkg)
 		err := parser.GenerateGORMServices(cfg, metadata)
 		if err != nil {
-			log.Panicln(err)
+			log.Fatalln(err)
 		}
 		os.Exit(0)
 	}
 
 	// Otherwise generate only
 	if err := parser.GenerateCode(cfg); err != nil {
-		log.Panicln(err)
+		log.Fatalln(err)
 	}
 
 	// If tsTypesPath is not empty generate the types
