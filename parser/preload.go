@@ -2,11 +2,16 @@ package parser
 
 import (
 	"sort"
+	"strings"
 )
 
 // filterPreloads returns a map of the longest unique strings representing the Gorm preload string.
 // Keys are Model(Struct) names.
+// Forexample: {"User": []string{"Profile", "Profile.Addresses", "Profile.Cards"}}
+// can omit "Profile" since its captured in other 2.
 func filterPreloads(dependencies map[string][]string) map[string][]string {
+	filteredPreloads := make(map[string][]string)
+
 	// Sort dependencies in descending order
 	for _, deps := range dependencies {
 		sort.Slice(deps, func(i, j int) bool {
@@ -14,31 +19,29 @@ func filterPreloads(dependencies map[string][]string) map[string][]string {
 		})
 	}
 
-	// Map to keep track of filtered dependencies
-	filtered := make(map[string][]string)
-	for key, deps := range dependencies {
-		var res []string
-		used := make(map[string]bool)
-		for _, dep := range deps {
-			skip := false
-			for i := 1; i < len(dep); i++ {
-				prefix := dep[:i]
-				if used[prefix] {
-					skip = true
+	for model, preloads := range dependencies {
+		uniquePreloads := make([]string, 0)
+
+		for _, preload := range preloads {
+			isUnique := true
+
+			// Check if the preload is captured by another preload
+			for _, otherPreload := range preloads {
+				if preload != otherPreload && strings.Contains(otherPreload, preload) {
+					isUnique = false
 					break
 				}
 			}
-			if !skip {
-				res = append(res, dep)
-				for i := 1; i < len(dep); i++ {
-					prefix := dep[:i]
-					used[prefix] = true
-				}
+
+			if isUnique {
+				uniquePreloads = append(uniquePreloads, preload)
 			}
 		}
-		filtered[key] = res
+
+		filteredPreloads[model] = uniquePreloads
 	}
-	return filtered
+
+	return filteredPreloads
 }
 
 // GetPreloadMap returns a map of preload statements for each table.
@@ -82,5 +85,6 @@ func GetPreloadMap(structs []StructMeta) map[string][]string {
 		visited := make(map[string]bool)
 		dict[s.Name] = visit(s.Name, visited)
 	}
+
 	return filterPreloads(dict)
 }

@@ -19,15 +19,17 @@ type (
 	}
 
 	Role struct {
-		ID     int64  `json:"id"`
-		Name   string `json:"name"`
-		Gender Sex    `json:"gender"`
+		ID      int64   `json:"id"`
+		Name    string  `json:"name"`
+		Gender  Sex     `json:"gender"`
+		Comment Comment `json:"comment" gorm:"foreignKey"`
 	}
 
 	Tag struct {
 		ID     int64   `json:"id"`
 		Name   string  `json:"name"`
 		Issues []Issue `gorm:"many2many:tag_issues" json:"issues"`
+		Role   Role    `json:"role" gorm:"foreignKey"`
 	}
 
 	Issue struct {
