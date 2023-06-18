@@ -532,7 +532,7 @@ type {{$ident}}Service interface {
 	Update({{$ident}}Id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
 
 	// Update a single column with specified conditions
-	UpdateColumn(columnName string, args ...any) error
+	UpdateColumn(columnName string, value any, where string, target ...any) error
 
 	// PartialUpdate for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
 	PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
@@ -556,9 +556,28 @@ func new{{.Model}}Service(db *gorm.DB) {{$ident}}Service {
 	return &{{$ident}}Repo{DB: db}
 }
 
+
+// Create new {{$ident}}
+func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...Option) error {
+	if err := repo.DB.Create({{$ident}}s).Error; err != nil{
+		return err
+	}
+
+	// Refetch to load associations if any
+	for i, record := range *{{$ident}}s{
+		record, err := repo.Get(record.ID, options...)
+		if err != nil {
+			return  err
+		}
+		(*{{$ident}}s)[i]=record
+	}
+	return nil
+}
+
+
 // Create new {{$ident}}
 func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) error {
-	if err := repo.DB.Create(&{{$ident}}).Error; err != nil{
+	if err := repo.DB.Create({{$ident}}).Error; err != nil{
 		return err
 	}
 
@@ -681,10 +700,9 @@ func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}
 }
 
 // Update a single column
-func (repo *{{$ident}}Repo) UpdateColumn(columnName string, args ...any) error{
-	return repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).UpdateColumn(columnName, args).Error;	
+func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, where string, target ...any) error{
+	return repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Where(where, target...).UpdateColumn(columnName, value).Error;	
 }
-
 
 // PartialUpdate for {{$ident}}. Only updates fields with no zero values. Returns the updated {{$ident}}
 func (repo *{{$ident}}Repo) PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
