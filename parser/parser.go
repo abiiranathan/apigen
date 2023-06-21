@@ -513,6 +513,9 @@ type {{$ident}}Service interface {
 	// Create new {{$ident}}
 	Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) error
 
+	// Create multiple {{$ident}}s
+	CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...Option) error
+
 	// Get a single {{$ident}} by id (primary key)
 	Get(id {{$pkType}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
 
