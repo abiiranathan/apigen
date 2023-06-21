@@ -494,8 +494,8 @@ func applyOptions(db *gorm.DB, options ...Option) *gorm.DB {
 type PaginatedResults[T any] struct {
     Page     int  ` + "`json:\"page\"`" + `
     PageSize int ` + "`json:\"page_size\"`" + `
-    NumPages  int64  ` + "`json:\"num_pages\"`" + `
-    TotalCount  int64  ` + "`json:\"total_count\"`" + `
+    TotalPages  int64  ` + "`json:\"total_pages\"`" + `
+    Count  int64  ` + "`json:\"count\"`" + `
     HasNext  bool ` + "`json:\"has_next\"`" + `
     HasPrev  bool ` + "`json:\"has_prev\"`" + `
     Results  []T  ` + "`json:\"results\"`" + `
@@ -660,8 +660,8 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
 		HasNext:  int64(page*pageSize) < totalCount,
 		HasPrev:  page > 1,
 		Results: results,
-		TotalCount: totalCount,
-		NumPages:   int64(math.Ceil(float64(totalCount) / float64(pageSize))),
+		Count: totalCount,
+		TotalPages:   int64(math.Ceil(float64(totalCount) / float64(pageSize))),
 	}
 
 	return paginatedResults, nil
