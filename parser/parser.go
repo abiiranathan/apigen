@@ -702,9 +702,9 @@ func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}
 	return repo.Get(id, options...)
 }
 
-// Update a single column
+// Update a single column. Gorm hooks will be fired because it uses Update() method.
 func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, where string, target ...any) error{
-	return repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Where(where, target...).UpdateColumn(columnName, value).Error;	
+	return repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Where(where, target...).Update(columnName, value).Error;	
 }
 
 // PartialUpdate for {{$ident}}. Only updates fields with no zero values. Returns the updated {{$ident}}
