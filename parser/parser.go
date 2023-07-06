@@ -251,6 +251,7 @@ type tmplData struct {
 	ModelObj     StructMeta // The model metadata object
 	Model        string     // The struct name e.g "User"
 	WritePKGDecl bool
+	OmitFields   []string // ForeignKey fields to Omit during Update
 	Preloads     []string // Stores fields to preload
 	SkipService  bool     // Whether to skip creating this service
 }
@@ -279,6 +280,20 @@ func generateGORMServices(outPkg string, modelPkg string,
 	modelNames := make([]string, len(structs))
 	for index, st := range structs {
 		modelNames[index] = st.Name
+		preloadFields := preloads[st.Name]
+
+		omitFields := []string{}
+		for _, f := range preloadFields {
+			var prefix string = f
+			if strings.Contains(f, ".") {
+				prefix = strings.Split(f, ".")[0]
+			}
+
+			if !sliceContains(omitFields, prefix) {
+				omitFields = append(omitFields, prefix)
+			}
+
+		}
 
 		data := tmplData{
 			PkgName:      outPkg,
@@ -287,7 +302,8 @@ func generateGORMServices(outPkg string, modelPkg string,
 			ModelObj:     st,
 			Model:        st.Name,
 			WritePKGDecl: index == 0,
-			Preloads:     preloads[st.Name],
+			Preloads:     preloadFields,
+			OmitFields:   omitFields,
 			SkipService:  sliceContains(skipServices, st.Name),
 		}
 		err := parseTemplate(buf, data)
@@ -318,7 +334,7 @@ func generateGORMServices(outPkg string, modelPkg string,
 		return nil, err
 	}
 
-	// fmt.Println(buf.String())
+	fmt.Println(buf.String())
 	// Format source
 	b, err := format.Source(buf.Bytes())
 	if err != nil {
@@ -333,6 +349,13 @@ func parseTemplate(w io.Writer, data tmplData) error {
 		"ToLower": strings.ToLower,
 		"ToCamelCase": func(s string) string {
 			return strcase.ToCamel(enCaser.String(s))
+		},
+		"join": func(s []string, sep string) string {
+			quotedSlice := make([]string, len(s))
+			for i, item := range s {
+				quotedSlice[i] = fmt.Sprintf("\"%s\"", item)
+			}
+			return strings.Join(quotedSlice, ", ")
 		},
 	}).Parse(serviceTemplate)
 
@@ -559,10 +582,9 @@ func new{{.Model}}Service(db *gorm.DB) {{$ident}}Service {
 	return &{{$ident}}Repo{DB: db}
 }
 
-
 // Create new {{$ident}}
 func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...Option) error {
-	if err := repo.DB.Create({{$ident}}s).Error; err != nil{
+	if err := repo.DB.Omit({{ join .OmitFields ","}}).Create({{$ident}}s).Error; err != nil{
 		return err
 	}
 
@@ -580,7 +602,7 @@ func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model
 
 // Create new {{$ident}}
 func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) error {
-	if err := repo.DB.Create({{$ident}}).Error; err != nil{
+	if err := repo.DB.Omit({{ join .OmitFields ","}}).Create({{$ident}}).Error; err != nil{
 		return err
 	}
 
@@ -698,7 +720,7 @@ func (repo *{{$ident}}Repo) FindMany(options ...Option) (results []{{.ModelPkgNa
 func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
 	// Make sure the ID is set on object to use Save(), otherwise you get unique constraint error.
 	{{$ident}}.ID = id
-	if err := repo.DB.Save({{$ident}}).Error; err != nil {
+	if err := repo.DB.Omit({{ join .OmitFields ","}}).Save({{$ident}}).Error; err != nil {
 		return {{.ModelPkgName}}.{{.Model}}{}, err
 	}
 	return repo.Get(id, options...)
@@ -711,7 +733,7 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, where str
 
 // PartialUpdate for {{$ident}}. Only updates fields with no zero values. Returns the updated {{$ident}}
 func (repo *{{$ident}}Repo) PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
-	if err := repo.DB.Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates({{$ident}}).Error; err != nil {
+	if err := repo.DB.Omit({{ join .OmitFields ","}}).Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates({{$ident}}).Error; err != nil {
 		return {{.ModelPkgName}}.{{.Model}}{}, err
 	}
 
