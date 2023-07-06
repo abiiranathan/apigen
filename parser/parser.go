@@ -696,6 +696,8 @@ func (repo *{{$ident}}Repo) FindMany(options ...Option) (results []{{.ModelPkgNa
 
 // Update {{$ident}} with all the fields. Uses gorm.DB.Save()
 func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
+	// Make sure the ID is set on object to use Save(), otherwise you get unique constraint error.
+	{{$ident}}.ID = id
 	if err := repo.DB.Save({{$ident}}).Error; err != nil {
 		return {{.ModelPkgName}}.{{.Model}}{}, err
 	}
