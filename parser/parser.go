@@ -334,7 +334,7 @@ func generateGORMServices(outPkg string, modelPkg string,
 		return nil, err
 	}
 
-	fmt.Println(buf.String())
+	// fmt.Println(buf.String())
 	// Format source
 	b, err := format.Source(buf.Bytes())
 	if err != nil {
