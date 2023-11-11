@@ -651,12 +651,6 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
 
 	var results []{{.ModelPkgName}}.{{.Model}}
 
-	// Retrieve total count of records
-	var totalCount int64
-	if err := repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Count(&totalCount).Error; err != nil {
-		return nil, err
-	}
-
 	// Page must be >= 1
 	if page < 1 {
 		page = 1
@@ -671,6 +665,12 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
     	db = db.Preload("{{$preloadStmt}}")
 	{{end -}}
 	db = applyOptions(db, options...)
+
+	// Retrieve total count of records after applying options
+	var totalCount int64
+	if err := db.Model(&{{.ModelPkgName}}.{{.Model}}{}).Count(&totalCount).Error; err != nil {
+		return nil, err
+	}
 
 	if err := db.Offset(offset).Limit(pageSize).Find(&results).Error; err != nil{
 		return nil, err
