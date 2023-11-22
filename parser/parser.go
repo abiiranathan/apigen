@@ -484,6 +484,14 @@ func Limit(limit int) Option{
 }
 
 
+// Distinct(args ...any) - Specify Distinct columns
+func Distinct(args ...any) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.Distinct(args...)
+		return db
+	}
+}
+
 //	Offset(2) - Select the third user
 func Offset(offset int) Option{
 	return func(db *gorm.DB) *gorm.DB{
