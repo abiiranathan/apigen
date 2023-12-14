@@ -4,13 +4,13 @@
 RootPkg='github.com/abiiranathan/apigen'
 
 [Models]
-Pkg='github.com/abiiranathan/apigen/models'
+Pkgs=['github.com/abiiranathan/apigen/models', 'github.com/abiiranathan/apigen/views']
 Skip=[]
+ReadOnly=['github.com/abiiranathan/apigen/views']
 
 [Output]
 OutDir='.'
 ServiceName='services'
-HandlersName='handlers'
 
 [overrides]
   [overrides.types]

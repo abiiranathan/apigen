@@ -151,72 +151,79 @@ func parseTemplate(w io.Writer, data templateData) error {
 // For all enumerated constants, generate enums that satisfy the Enummer interface
 // suffix is appended to each filename e.g Uses _enum by default.
 // Returns sql string that you can use to create these ENUM types in postgres
-func GenerateEnums(pkgName string, suffix ...string) (sql string, err error) {
+func GenerateEnums(pkgNames []string, suffix ...string) (sql string, err error) {
 	if len(suffix) == 0 {
 		suffix = append(suffix, "_enum")
 	}
 
 	base := suffix[0] + ".go"
-	enums, err := getPKGEnumMap(pkgName)
-	if err != nil {
-		return "", fmt.Errorf("getPKGEnumMap(): %w", err)
-	}
 
-	// Create types for postgres
-	type enum_type struct {
-		name   string
-		values []string
-	}
-	enumsTypes := []enum_type{}
+	globalBuffer := new(bytes.Buffer)
+	for pkgIndex, pkgName := range pkgNames {
 
-	for pkgPath, pkgData := range enums {
-		for filename, enumDict := range pkgData {
-			buffer := bytes.Buffer{}
-			count := 0
-			for key, values := range enumDict {
-				err := parseTemplate(&buffer, templateData{
-					PkgName:      pkgPath.Name,
-					TypeName:     key,
-					Values:       values,
-					WritePKGDecl: count == 0,
-				})
+		enums, err := getPKGEnumMap(pkgName)
+		if err != nil {
+			return "", fmt.Errorf("getPKGEnumMap(): %w", err)
+		}
 
-				if err != nil {
-					return "", err
+		// Create types for postgres
+		type enum_type struct {
+			name   string
+			values []string
+		}
+		enumsTypes := []enum_type{}
+
+		for pkgPath, pkgData := range enums {
+			for filename, enumDict := range pkgData {
+				buffer := bytes.Buffer{}
+				count := 0
+				for key, values := range enumDict {
+					err := parseTemplate(&buffer, templateData{
+						PkgName:      pkgPath.Name,
+						TypeName:     key,
+						Values:       values,
+						WritePKGDecl: count == 0 && pkgIndex == 0,
+					})
+
+					if err != nil {
+						return "", err
+					}
+					enumsTypes = append(enumsTypes, enum_type{
+						name:   key,
+						values: values,
+					})
 				}
-				enumsTypes = append(enumsTypes, enum_type{
-					name:   key,
-					values: values,
-				})
-			}
 
-			// increase count
-			count++
+				// increase count
+				count++
 
-			filebase := strings.Split(filepath.Base(filename), ".")[0]
-			absPath := filepath.Join(filepath.Dir(filename), filebase+base)
+				filebase := strings.Split(filepath.Base(filename), ".")[0]
+				absPath := filepath.Join(filepath.Dir(filename), filebase+base)
 
-			// Format source
-			b, err := format.Source(buffer.Bytes())
-			if err != nil {
-				return "", fmt.Errorf("error format source file: %w, source: %s", err, b)
-			}
+				// Format source
+				b, err := format.Source(buffer.Bytes())
+				if err != nil {
+					return "", fmt.Errorf("error format source file: %w, source: %s", err, b)
+				}
 
-			// Write contents to the file.
-			if err := os.WriteFile(absPath, b, 0644); err != nil {
-				return "", fmt.Errorf("error writing buffer: %w", err)
+				// Write contents to the file.
+				if err := os.WriteFile(absPath, b, 0644); err != nil {
+					return "", fmt.Errorf("error writing buffer: %w", err)
+				}
 			}
 		}
+
+		// Write the enum types
+		buf := new(bytes.Buffer)
+
+		for _, item := range enumsTypes {
+			// convert to name to snake case.
+			fmt.Fprintf(buf, "CREATE TYPE %s AS ENUM(%s);\n", strcase.ToSnake(item.name), QuoteEnums(item.values))
+		}
+		globalBuffer.Write(buf.Bytes())
 	}
 
-	// Write the enum types
-	buf := new(bytes.Buffer)
-
-	for _, item := range enumsTypes {
-		// convert to name to snake case.
-		fmt.Fprintf(buf, "CREATE TYPE %s AS ENUM(%s);\n", strcase.ToSnake(item.name), QuoteEnums(item.values))
-	}
-	return buf.String(), nil
+	return globalBuffer.String(), nil
 }
 
 var templateString = `
@@ -231,14 +238,9 @@ import (
 {{end}}
 
 
-var validValues = []string{
-	{{range $val := $values -}}
-		   "{{$val -}}",
-	{{end -}}
-}
 
 func (e {{.TypeName}}) IsValid() bool {
-	for _, val := range validValues {
+	for _, val := range e.ValidValues() {
 		if val == string(e) {
 			return true
 		}
@@ -247,7 +249,11 @@ func (e {{.TypeName}}) IsValid() bool {
 }
 
 func (e {{.TypeName}}) ValidValues() []string {
-	return validValues
+	return []string{
+		{{range $val := $values -}}
+			   "{{$val -}}",
+		{{end -}}
+	}
 }
 
 func (e *{{.TypeName}}) Scan(src interface{}) error {
