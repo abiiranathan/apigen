@@ -12,14 +12,14 @@ import (
 type Config struct {
 	RootPkg string `toml:"RootPkg"` // Root package name for the project
 	Models  struct {
-		Pkg  string   `toml:"Pkg"`  // absolute package name where models are located
-		Skip []string `toml:"Skip"` // Slice of models(Structs) to skip
+		Pkgs     []string `toml:"Pkgs"`     // absolute package names where models are located
+		Skip     []string `toml:"Skip"`     // Slice of models(Structs) to skip
+		ReadOnly []string `toml:"ReadOnly"` // For SQL Views
 	} `toml:"Models"`
 
 	Output struct {
-		ServiceName  string `toml:"ServiceName"`  // simple name for the services default: services
-		HandlersName string `toml:"HandlersName"` // simple name for the handlers default: handlers
-		OutDir       string `toml:"OutDir"`       // Directory where to create new packages: default "."
+		ServiceName string `toml:"ServiceName"` // simple name for the services default: services
+		OutDir      string `toml:"OutDir"`      // Directory where to create new packages: default "."
 	} `toml:"Output"`
 	Overrides Overrides `toml:"overrides"`
 }
@@ -49,14 +49,21 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func validateConfig(cfg *Config) error {
-	if cfg.Models.Pkg == "" {
-		return fmt.Errorf("error: Models.Pkg configuration is a required in apigen.toml")
+	if len(cfg.Models.Pkgs) == 0 {
+		return fmt.Errorf("models.Pkgs is empty in apigen.toml")
 	}
 
-	if cfg.Output.OutDir == "." {
-		cfg.Output.OutDir, _ = os.Getwd()
-	} else {
-		cfg.Output.OutDir, _ = filepath.Abs(cfg.Output.OutDir)
+	for _, pkg := range cfg.Models.Pkgs {
+		if pkg == "" {
+			return fmt.Errorf("error: Models.Pkgs has an empty pkg in apigen.toml")
+		}
+
+		if cfg.Output.OutDir == "." {
+			cfg.Output.OutDir, _ = os.Getwd()
+		} else {
+			cfg.Output.OutDir, _ = filepath.Abs(cfg.Output.OutDir)
+		}
+
 	}
 	return nil
 }

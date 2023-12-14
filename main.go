@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/abiiranathan/apigen/config"
 	"github.com/abiiranathan/apigen/enums"
@@ -21,7 +22,7 @@ var configData = []byte(`# apigen configuration file.
 RootPkg='github.com/username/module'
 
 [Models]
-Pkg='github.com/username/module/models'
+Pkgs=['github.com/username/module/models']
 Skip=[]
 
 [Output]
@@ -51,8 +52,8 @@ var (
 	generateEnums        bool
 	pgtypesPath          string
 	tsTypesPath          string
-	// Alternative pkg for enums (if different from models pkg specified in config file.)
-	enumsPkg string
+	enumsPkg             string // Alternative pkgs for enums, seperated by commas
+
 )
 
 func Usage() {
@@ -97,11 +98,12 @@ func main() {
 
 	// Generate code for enumerated constants
 	if generateEnums {
-		packageName := cfg.Models.Pkg
+		packageNames := cfg.Models.Pkgs
 		if enumsPkg != "" {
-			packageName = enumsPkg
+			packageNames = strings.Split(enumsPkg, ",")
 		}
-		sql, err := enums.GenerateEnums(packageName)
+
+		sql, err := enums.GenerateEnums(packageNames)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -118,7 +120,7 @@ func main() {
 
 	// Generate only services and exit
 	if generateOnlyServices {
-		metadata := parser.Parse(cfg.Models.Pkg)
+		metadata := parser.Parse(cfg.Models.Pkgs)
 		err := parser.GenerateGORMServices(cfg, metadata)
 		if err != nil {
 			log.Fatalln(err)
@@ -137,7 +139,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("error creating file: %s - %v\n", tsTypesPath, err)
 		}
-		meta := parser.Parse(cfg.Models.Pkg)
+
+		meta := parser.Parse(cfg.Models.Pkgs)
 		mapMeta := parser.Map(meta)
 		typescript.GenerateTypescriptInterfaces(f, mapMeta, cfg.Overrides)
 	}

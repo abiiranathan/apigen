@@ -6,13 +6,8 @@ import (
 	"fmt"
 )
 
-var validValues = []string{
-	"Male",
-	"Female",
-}
-
 func (e Sex) IsValid() bool {
-	for _, val := range validValues {
+	for _, val := range e.ValidValues() {
 		if val == string(e) {
 			return true
 		}
@@ -21,7 +16,10 @@ func (e Sex) IsValid() bool {
 }
 
 func (e Sex) ValidValues() []string {
-	return validValues
+	return []string{
+		"Male",
+		"Female",
+	}
 }
 
 func (e *Sex) Scan(src interface{}) error {
