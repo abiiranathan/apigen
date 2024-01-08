@@ -28,7 +28,6 @@ Skip=[]
 [Output]
 OutDir='.'
 ServiceName='services'
-HandlersName='handlers'
 `)
 
 func initConfigFile() {
