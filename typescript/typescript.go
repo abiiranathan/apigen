@@ -92,8 +92,10 @@ func generateInterfaces(
 			if strings.HasPrefix(f.Type, "[]") || strings.HasPrefix(f.Type, "[") {
 				// Get the element type of the slice or array
 				elementType := f.Type[strings.IndexByte(f.Type, ']')+1:]
+
 				if input, ok := inputs[elementType]; ok {
-					generateInterfaces(output, map[string]parser.StructMeta{input.Name: input}, overrides, true, generated)
+					generateInterfaces(output,
+						map[string]parser.StructMeta{input.Name: input}, overrides, true, generated)
 					builder.WriteString(": ")
 					builder.WriteString(input.Name)
 					builder.WriteString("[];")
@@ -105,7 +107,8 @@ func generateInterfaces(
 				// Check if f.Type references a struct in the inputs map
 				if structMeta, ok := inputs[f.Type]; ok {
 					// Recursively generate interface for referenced struct
-					generateInterfaces(output, map[string]parser.StructMeta{f.Type: structMeta}, overrides, true, generated)
+					generateInterfaces(output,
+						map[string]parser.StructMeta{f.Type: structMeta}, overrides, true, generated)
 					builder.WriteString(": ")
 					builder.WriteString(structMeta.Name)
 					builder.WriteString(";")
@@ -150,7 +153,8 @@ func writeFieldType(builder *strings.Builder, fieldType string) {
 	case "time.Time":
 		builder.WriteString(": string;")
 	default:
-		builder.WriteString(": any;")
+		builder.WriteString(": ")
+		builder.WriteString(fieldType)
 	}
 }
 

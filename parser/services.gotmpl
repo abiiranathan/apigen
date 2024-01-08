@@ -14,7 +14,6 @@ import (
 /*
 Options to pass to GORM.
 Preferred order of option: Select,Group, Where, Or, Joins, Preload, Order, Limit, Offset, etc
-For example:
 
 	Select("column1, column2").
     Where("column3 = ?", value).
@@ -143,6 +142,44 @@ func Joins(query string, args ...interface{}) Option{
 	}
 }
 
+func Or(query interface{}, args ...interface{}) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.Or(query, args...)
+		return db
+	}
+}
+
+// Scopes pass current database connection to arguments `func(db *gorm.DB) *gorm.DB`, which could be used to add conditions dynamically
+func Scopes(funcs ...func(db *gorm.DB) *gorm.DB) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.Scopes(funcs...)
+		return db
+	}
+}
+
+// Unscoped return all record including deleted record, refer Soft Delete
+func Unscoped() Option{
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.Unscoped()
+		return db
+	}
+}
+
+// Attrs initialize struct with argument if record not found with Where
+func Attrs(attrs ...any) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.Attrs(attrs...)
+		return db
+	}
+}
+
+// Assign assign result with argument regardless it is found or not
+func Assign(attrs ...any) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.Assign(attrs...)
+		return db
+	}
+}
 
 func applyOptions(db *gorm.DB, options ...Option) *gorm.DB {
 	for _, option := range options{
@@ -207,6 +244,9 @@ type {{$ident}}Service interface {
 
 	// Retrieves all {{$ident}}s from the database
 	GetAll(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error)
+
+	// Count returns the number of records matching the query
+	Count(options ...Option) (int64, error)
 
 	// Find the first record matching condition specified by query &amp; args
 	FindOne(options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
@@ -352,6 +392,17 @@ func (repo *{{$ident}}Repo) GetAll(options ...Option) (results []{{.ModelPkgName
 	db = applyOptions(db, options...)
 	err = db.Find(&results).Error
 	return
+}
+
+// Count returns the number of records matching the query
+func (repo *{{$ident}}Repo) Count(options ...Option) (int64, error) {
+	var count int64
+	db := repo.DB
+	db = applyOptions(db, options...)
+	if err := db.Model(&{{.ModelPkgName}}.{{.Model}}{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // GetPaginated retrieves a paginated list of users

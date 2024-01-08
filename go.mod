@@ -1,21 +1,27 @@
 module github.com/abiiranathan/apigen
 
-go 1.21
+go 1.21.1
+
+toolchain go1.21.5
 
 require (
+	github.com/abiiranathan/goflag v0.0.4
 	github.com/iancoleman/strcase v0.2.0
 	github.com/pelletier/go-toml/v2 v2.0.7
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/text v0.9.0
-	golang.org/x/tools v0.7.0
+	golang.org/x/tools v0.13.0
+	gorm.io/driver/mysql v1.5.2
 	gorm.io/driver/postgres v1.5.2
+	gorm.io/driver/sqlite v1.5.4
 	gorm.io/gorm v1.25.2
 )
 
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/go-sql-driver/mysql v1.7.0 // indirect
+	github.com/google/uuid v1.5.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgx/v5 v5.3.1 // indirect
@@ -26,6 +32,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
@@ -42,6 +49,6 @@ require (
 
 require (
 	github.com/gofiber/fiber/v2 v2.45.0
-	golang.org/x/mod v0.9.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
 )

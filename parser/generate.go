@@ -43,10 +43,10 @@ func GenerateGORMServices(cfg *config.Config, structMetaData []StructMeta) (err 
 	}
 
 	// Generate the postgres database connection helpers
-	dbPath := filepath.Join(targetDir, "postgres.go")
+	dbPath := filepath.Join(targetDir, "database.go")
 	err = writeFile(dbPath, []byte(fmt.Sprintf(dbText, cfg.Output.ServiceName)))
 	if err != nil {
-		fmt.Printf("error writing to postgres.go helper %q: %v", dbPath, err)
+		fmt.Printf("error writing to database.go helper %q: %v", dbPath, err)
 	}
 	return nil
 }
@@ -64,12 +64,4 @@ func createDirectory(path string) error {
 func writeFile(path string, data []byte) error {
 	return os.WriteFile(path, data, 0644)
 
-}
-
-// Main entry point to generate services and handlers for the your
-// go structs as specified in the .toml configuration.
-func GenerateCode(cfg *config.Config) error {
-	metadata := Parse(cfg.Models.Pkgs)
-	// Generate code
-	return GenerateGORMServices(cfg, metadata)
 }

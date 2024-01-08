@@ -12,6 +12,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/driver/sqlite"
+	"gorm.io/driver/mysql"
 )
 
 func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel) (*gorm.DB, error) {
@@ -113,4 +115,56 @@ func ParseDSN(dsn string, config *DatabaseConfig) {
 		config.SSLMode = "disabled"
 	}
 }
+
+
+// sqlite3 connection
+func Sqlite3Connection(connUri string, logLevel logger.LogLevel) (*gorm.DB, error) {
+	db, err := gorm.Open(sqlite.Open(connUri), &gorm.Config{
+		PrepareStmt:                      true,
+		IgnoreRelationshipsWhenMigrating: false,
+		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				LogLevel: logLevel,
+			}),
+	})
+	return db, err
+}
+
+
+// mysql connection
+func MysqlConnection(dsn string, timezone string, logLevel logger.LogLevel) (*gorm.DB, error) {
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		NowFunc: func() time.Time {
+			loc, err := time.LoadLocation(timezone)
+			if err != nil {
+				return time.Now()
+			}
+			return time.Now().In(loc)
+		},
+		PrepareStmt:                      true,
+		IgnoreRelationshipsWhenMigrating: false,
+		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				LogLevel: logLevel,
+			}),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// ping database
+	err = ping(db)
+	if err != nil {
+		return nil, fmt.Errorf("ping(): %%v", err)
+	}
+
+	// Use a connection pool
+	err = setConnPool(db)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
 `
