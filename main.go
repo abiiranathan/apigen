@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/abiiranathan/apigen/config"
 	"github.com/abiiranathan/apigen/enums"
@@ -54,7 +53,6 @@ func generateSubcommand(ctx goflag.Getter, cmd goflag.Getter) {
 	}
 
 	var generateEnums = cmd.GetBool("enums")
-	var enumsPkg = cmd.GetString("enums-pkg")
 	var pgtypesPath = cmd.GetString("pgtypes")
 	var tsTypesPath = cmd.GetString("typescript")
 
@@ -65,19 +63,8 @@ func generateSubcommand(ctx goflag.Getter, cmd goflag.Getter) {
 
 	// Generate code for enumerated constants
 	if generateEnums {
-		packageNames := cfg.Models.Pkgs
-
-		// Override package names if enumsPkg is not empty
-		if enumsPkg != "" {
-			packageNames = strings.Split(enumsPkg, ",")
-		}
-
-		if len(packageNames) == 0 {
-			log.Fatalf("generating enums requires a valid enums-pks flag or configuration in apigen.toml")
-		}
-
 		// Generate sql for postgres enums
-		sql, err := enums.GenerateEnums(packageNames)
+		sql, err := enums.GenerateEnums(cfg.Models.Pkgs)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -124,7 +111,6 @@ func main() {
 	genSubcmd := ctx.AddSubCommand(goflag.SubCommand("generate", "Generate code", generateSubcommand))
 
 	genSubcmd.AddFlag(goflag.Bool("enums", "e", true, "Generate enums code present in the package.", false))
-	genSubcmd.AddFlag(goflag.String("enums-pkg", "p", "", "Alternative pkg for enums.", false))
 	genSubcmd.AddFlag(goflag.String("pgtypes", "d", "enums.sql", "File path to write the sql for the postgres enums. If empty, no sql is written", false))
 	genSubcmd.AddFlag(goflag.String("typescript", "t", "", "File path to write the typescript types. If empty, no typescript is written", false))
 

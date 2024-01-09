@@ -160,7 +160,6 @@ func GenerateEnums(pkgNames []string, suffix ...string) (sql string, err error) 
 
 	globalBuffer := new(bytes.Buffer)
 	for pkgIndex, pkgName := range pkgNames {
-
 		enums, err := getPKGEnumMap(pkgName)
 		if err != nil {
 			return "", fmt.Errorf("getPKGEnumMap(): %w", err)
@@ -199,6 +198,8 @@ func GenerateEnums(pkgNames []string, suffix ...string) (sql string, err error) 
 
 				filebase := strings.Split(filepath.Base(filename), ".")[0]
 				absPath := filepath.Join(filepath.Dir(filename), filebase+base)
+
+				fmt.Println(absPath)
 
 				// Format source
 				b, err := format.Source(buffer.Bytes())
