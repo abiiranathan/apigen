@@ -5,7 +5,7 @@ go 1.21.1
 toolchain go1.21.5
 
 require (
-	github.com/abiiranathan/goflag v0.0.4
+	github.com/abiiranathan/goflag v0.1.1
 	github.com/iancoleman/strcase v0.2.0
 	github.com/pelletier/go-toml/v2 v2.0.7
 	github.com/stretchr/testify v1.8.2

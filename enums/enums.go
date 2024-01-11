@@ -199,8 +199,6 @@ func GenerateEnums(pkgNames []string, suffix ...string) (sql string, err error) 
 				filebase := strings.Split(filepath.Base(filename), ".")[0]
 				absPath := filepath.Join(filepath.Dir(filename), filebase+base)
 
-				fmt.Println(absPath)
-
 				// Format source
 				b, err := format.Source(buffer.Bytes())
 				if err != nil {

@@ -186,6 +186,8 @@ func generateSQL(model interface{}) (schemas []string, tableMap TableMap) {
 				dataType = enumer.DatabaseType()
 				enumsMap[fieldName] = enumer.ValidValues()
 				initFieldDef()
+			} else {
+				panic(fmt.Sprintf("Unknown type %s for field %s", goType, fieldName))
 			}
 		}
 
