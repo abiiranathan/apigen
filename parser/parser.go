@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/format"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -270,17 +271,8 @@ type tmplData struct {
 	SkipService  bool     // Whether to skip creating this service
 }
 
-func sliceContains(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 func packageReadOnly(cfg *config.Config, pkg string) bool {
-	return sliceContains(cfg.Models.ReadOnly, pkg)
+	return slices.Contains(cfg.Models.ReadOnly, pkg)
 }
 
 // Generate services for models in pkg.
@@ -306,7 +298,7 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 				prefix = strings.Split(f, ".")[0]
 			}
 
-			if !sliceContains(omitFields, prefix) {
+			if !slices.Contains(omitFields, prefix) {
 				omitFields = append(omitFields, prefix)
 			}
 
@@ -323,7 +315,7 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 			WritePKGDecl: index == 0,
 			Preloads:     preloadFields,
 			OmitFields:   omitFields,
-			SkipService:  sliceContains(cfg.Models.Skip, st.Name),
+			SkipService:  slices.Contains(cfg.Models.Skip, st.Name),
 		}
 		err := parseTemplate(buf, data)
 		if err != nil {
@@ -344,7 +336,11 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 
 	services := make([]string, 0, len(modelNames))
 	for _, m := range modelNames {
-		if !sliceContains(cfg.Models.Skip, m) {
+		if slices.Contains(services, m) {
+			continue
+		}
+
+		if !slices.Contains(cfg.Models.Skip, m) {
 			services = append(services, m)
 		}
 	}
