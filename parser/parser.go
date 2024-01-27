@@ -288,6 +288,11 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 		parts := strings.Split(st.Package, "/")
 		modelPkgName := parts[len(parts)-1]
 
+		// Avoid duplicate services
+		if slices.Contains(modelNames, st.Name) {
+			continue
+		}
+
 		modelNames[index] = st.Name
 		preloadFields := preloads[st.Name]
 

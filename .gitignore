@@ -7,3 +7,4 @@ handlers
 cmd/apigen/apigen.toml
 apigen
 api.http
+enums.sql
