@@ -282,7 +282,7 @@ func packageReadOnly(cfg *config.Config, pkg string) bool {
 func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, error) {
 	preloads := GetPreloadMap(structs)
 	buf := new(bytes.Buffer)
-	modelNames := make([]string, len(structs))
+	modelNames := make([]string, 0, len(structs))
 
 	for index, st := range structs {
 		parts := strings.Split(st.Package, "/")
@@ -293,7 +293,7 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 			continue
 		}
 
-		modelNames[index] = st.Name
+		modelNames = append(modelNames, st.Name)
 		preloadFields := preloads[st.Name]
 
 		omitFields := []string{}
