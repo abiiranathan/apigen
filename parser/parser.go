@@ -298,7 +298,7 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 
 		omitFields := []string{}
 		for _, f := range preloadFields {
-			var prefix string = f
+			var prefix  = f
 			if strings.Contains(f, ".") {
 				prefix = strings.Split(f, ".")[0]
 			}
@@ -370,7 +370,7 @@ func parseTemplate(w io.Writer, data tmplData) error {
 		"ToCamelCase": func(s string) string {
 			return strcase.ToCamel(enCaser.String(s))
 		},
-		"join": func(s []string, sep string) string {
+		"join": func(s []string, _ string) string {
 			quotedSlice := make([]string, len(s))
 			for i, item := range s {
 				quotedSlice[i] = fmt.Sprintf("\"%s\"", item)
