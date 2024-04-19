@@ -26,6 +26,8 @@ Preferred order of option: Select,Group, Where, Or, Joins, Preload, Order, Limit
 */
 type Option func(db *gorm.DB)*gorm.DB
 
+// Options is a list of Option
+type Options []Option
 
 /*
 Where add conditions
@@ -178,6 +180,32 @@ func Attrs(attrs ...any) Option{
 func Assign(attrs ...any) Option{
 	return func(db *gorm.DB) *gorm.DB{
 		db = db.Assign(attrs...)
+		return db
+	}
+}
+
+// DateRange applies date range filter on a date column
+func DateRange(column string, start, end string) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		if start != "" && end != "" {
+			db = db.Where(column+" BETWEEN ? AND ?", start, end)
+		}else if start != "" {
+			db = db.Where(column+" >= ?", start)
+		}else if end != "" {
+			db = db.Where(column+" <= ?", end)
+		}
+		return db
+	}
+}
+
+
+// ILIKE applies case-insensitive search on a column.
+// If a value is empty, it does nothing.
+func ILIKE(column, value string) Option{
+	return func(db *gorm.DB) *gorm.DB{
+		if value != "" {
+			db = db.Where(column+" ILIKE ?", "%"+value+"%")
+		}
 		return db
 	}
 }
