@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/format"
 	"io"
+	"log"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,6 +25,8 @@ var serviceTemplate []byte
 
 var enCaser = cases.Title(language.English)
 
+const skipTag = "apigen:skip"
+
 // Field contains meta-data for each struct field.
 type Field struct {
 	Name     string // Field Exact name
@@ -39,7 +42,8 @@ type StructMeta struct {
 	Name    string  // Model name e.g User
 	PKType  string  // PKType e.g int, int64 etc
 	Fields  []Field // Fields for struct fields that are builtin(only)
-	Package string
+	Package string  // Package name e.g "github.com/username/module/models"
+	Skip    bool    // Skip generating service for this struct
 }
 
 // Helper function to properly handle ast.Expr
@@ -105,6 +109,16 @@ func Parse(modelPkgs []string) []StructMeta {
 						meta := StructMeta{
 							Name:    t.Name.Name,
 							Package: pkg.String(),
+						}
+
+						// Check if struct should be skipped by reading for doc comments
+						if t.Doc != nil {
+							for _, comment := range t.Doc.List {
+								if strings.Contains(comment.Text, skipTag) {
+									meta.Skip = true
+									log.Println("Skipping struct:", meta.Name)
+								}
+							}
 						}
 
 						for _, field := range stype.Fields.List {
@@ -241,7 +255,7 @@ func Parse(modelPkgs []string) []StructMeta {
 						structSlice = append(structSlice, meta)
 					}
 				}
-				return true
+				return true // Continue traversing the AST
 			})
 		}
 	}
@@ -298,7 +312,7 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 
 		omitFields := []string{}
 		for _, f := range preloadFields {
-			var prefix  = f
+			var prefix = f
 			if strings.Contains(f, ".") {
 				prefix = strings.Split(f, ".")[0]
 			}
@@ -396,6 +410,27 @@ type Service struct {
 	{{range .}}
 	{{.}}Service  {{.| ToLower }}Service
 	{{- end}}
+
+	DB *gorm.DB
+}
+
+// Add support for transactions at service level
+func (s *Service) Begin() (*Service, error){
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	return NewService(tx), nil
+}
+
+// Commit all transactions
+func (s *Service) Commit() error {
+	return s.DB.Commit().Error
+}
+
+// Rollback all transactions
+func (s *Service) Rollback() error {
+	return s.DB.Rollback().Error
 }
 
 // Returns a new Service that embeds all the generated services.
@@ -404,6 +439,7 @@ func NewService(db *gorm.DB) *Service {
 		{{- range .}}
 		{{.}}Service: new{{.}}Service(db),
 		{{- end}}
+		DB: db,
 	}
 }
 

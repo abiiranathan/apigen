@@ -8,6 +8,7 @@ import (
 		"{{ . }}"
 	{{- end }}
 	"gorm.io/gorm"
+	"database/sql"
 	"math"
 )
 
@@ -221,7 +222,7 @@ type {{$ident}}Service interface {
 		{{ end }}
 
 		// Update a single column with specified conditions
-		UpdateColumn(columnName string, value any, where string, target ...any) error
+		UpdateColumn(columnName string, value any, query string, args ...any) error
 
 		{{ if ne $pkType "" }}
 			// PartialUpdate for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
@@ -235,6 +236,16 @@ type {{$ident}}Service interface {
 
 		// Permanently Delete {{$ident}} from the database matching conditions.
 		DeleteWhere(value string, conds ...any) error
+
+		// Begin returns a new instance of {{$ident}}Service that runs all queries in a transaction.
+		// Call Rollback() to undo changes and Commit() to Commit the changes.
+		Begin(opts ...*sql.TxOptions)({{$ident}}Service, error)
+
+		// Commit all transactions run with the service.
+		Commit() error
+
+		// Rollback transaction.
+		Rollback() error
 	{{ end }}
 
 	{{ if ne $pkType "" }}
@@ -316,8 +327,8 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 {{ end }}
 
 // Update a single column. Gorm hooks will be fired because it uses Update() method.
-func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, where string, target ...any) error{
-	return repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Where(where, target...).Update(columnName, value).Error;	
+func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query string, args ...any) error{
+	return repo.DB.Model(&{{.ModelPkgName}}.{{.Model}}{}).Where(query, args...).Update(columnName, value).Error;	
 }
 
 {{ if ne $pkType "" }}
@@ -357,6 +368,27 @@ func (repo *{{$ident}}Repo) DeleteWhere(value string, conds ...any) error {
 		return err
 	}
 	return nil
+}
+
+
+// Begin returns a new instance of {{$ident}}Service that runs all queries in a transaction.
+// Call Rollback() to undo changes and Commit() to Commit the changes.
+func (repo *{{$ident}}Repo) Begin(opts ...*sql.TxOptions)({{$ident}}Service, error){
+	tx := repo.DB.Begin(opts...)
+	if tx.Error != nil{
+		return nil, tx.Error
+	}
+	return new{{.Model}}Service(tx), nil
+}
+
+// Commit all transactions run with the service. Must have called .Begin() before.
+func (repo *{{$ident}}Repo) Commit() error{
+	return repo.DB.Commit().Error
+}
+
+// Rollback transaction on error.
+func (repo *{{$ident}}Repo) Rollback() error{
+	return repo.DB.Rollback().Error
 }
 
 {{ end }}

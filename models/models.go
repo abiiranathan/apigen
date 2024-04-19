@@ -19,17 +19,18 @@ type (
 	}
 
 	Role struct {
-		ID      int64   `json:"id"`
-		Name    string  `json:"name"`
-		Gender  Sex     `json:"gender"`
-		Comment Comment `json:"comment" gorm:"foreignKey"`
+		ID     int64  `json:"id"`
+		Name   string `json:"name"`
+		Gender Sex    `json:"gender"`
 	}
 
 	Tag struct {
 		ID     int64   `json:"id"`
 		Name   string  `json:"name"`
 		Issues []Issue `gorm:"many2many:tag_issues" json:"issues"`
-		Role   Role    `json:"role" gorm:"foreignKey"`
+
+		RoleID int64 `json:"role_id" gorm:"not null"`
+		Role   Role  `json:"role" gorm:"foreignKey:RoleID"`
 	}
 
 	Issue struct {
@@ -37,15 +38,16 @@ type (
 		Name string `json:"name"`
 	}
 
+	// apigen:skip
 	Question struct {
 		ID       int       `json:"id"`
-		Comments []Comment `json:"comments"`
+		Comments []Comment `json:"comments" gorm:"many2many:question_comments"`
 	}
 
 	// Test recursion
 	Comment struct {
 		ID         int       `json:"id"`
 		QuestionID int       `json:"question_id"`
-		Comments   []Comment `json:"comments"`
+		Comments   []Comment `json:"comments" gorm:"many2many:comment_comments"`
 	}
 )

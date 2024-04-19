@@ -15,36 +15,44 @@ import (
 
 var (
 	configName    = "apigen.toml"
-	generateEnums = true
+	generateEnums = false
 	pgtypesPath   = "enums.sql"
 	tsTypesPath   = ""
 )
 
-func initConfigFile() {
-	var configData = []byte(`# apigen configuration file.
-# Strings should use single quotes
+func defineFlags(ctx *goflag.Context) {
+	// Global flags
+	ctx.AddFlag(goflag.FlagFilePath, "config", "c", &configName, "Path to config filename.", false)
 
-[Models]
-Pkgs=['github.com/username/module/models']
-Skip=[]
+	// Subcommands
+	ctx.AddSubCommand("init", "Initialize project and generate apigen.toml", initConfigFile)
+	genSubcmd := ctx.AddSubCommand("generate", "Generate code", generateSubcommand)
 
-[Output]
-OutDir='.'
-ServiceName='services'
-`)
+	genSubcmd.AddFlag(goflag.FlagBool, "enums", "e", &generateEnums, "Generate enums code present in the package.", false)
+	genSubcmd.AddFlag(goflag.FlagString, "pgtypes", "d", &pgtypesPath, "File path to write the sql for the postgres enums. If empty, no sql is written", false)
+	genSubcmd.AddFlag(goflag.FlagString, "typescript", "t", &tsTypesPath, "File path to write the typescript types. If empty, no typescript is written", false)
+}
 
-	// If config file already exists, print message and return
-	if _, err := os.Stat(configName); err == nil {
-		fmt.Println(configName, "already initialized")
-		return
+func main() {
+	ctx := goflag.NewContext()
+	defineFlags(ctx)
+
+	if len(os.Args) < 2 {
+		ctx.PrintUsage(os.Stderr)
+		os.Exit(1)
 	}
 
-	// Write default text to config
-	err := os.WriteFile(configName, configData, 0644)
+	// Parse flags
+	subcmd, err := ctx.Parse(os.Args)
 	if err != nil {
-		log.Fatalf("error creating config file: %v\n", err)
+		log.Fatalln(err)
 	}
-	os.Exit(0)
+
+	// If a subcommand is found, execute it and exit
+	if subcmd != nil {
+		subcmd.Handler()
+		os.Exit(0)
+	}
 }
 
 func generateSubcommand() {
@@ -72,7 +80,10 @@ func generateSubcommand() {
 		if err := os.MkdirAll(dirname, 0755); err != nil {
 			log.Fatalf("error creating directory: %s: %v\n", dirname, err)
 		}
-		os.WriteFile(pgtypesPath, []byte(sql), 06400)
+		err = os.WriteFile(pgtypesPath, []byte(sql), 06400)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
 	}
 
@@ -97,34 +108,29 @@ func generateSubcommand() {
 	os.Exit(0)
 }
 
-func main() {
-	// Initialize goflag context
-	ctx := goflag.NewContext()
+func initConfigFile() {
+	var configData = []byte(`# apigen configuration file.
+# Strings should use single quotes
 
-	// Global flags
-	ctx.AddFlag(goflag.FlagFilePath, "config", "c", &configName, "Path to config filename.", false)
+[Models]
+Pkgs=['github.com/username/module/models']
+Skip=[]
 
-	// Subcommands
-	ctx.AddSubCommand("init", "Initialize project and generate apigen.toml", initConfigFile)
-	genSubcmd := ctx.AddSubCommand("generate", "Generate code", generateSubcommand)
+[Output]
+OutDir='.'
+ServiceName='services'
+`)
 
-	genSubcmd.AddFlag(goflag.FlagBool, "enums", "e", &generateEnums, "Generate enums code present in the package.", false)
-	genSubcmd.AddFlag(goflag.FlagString, "pgtypes", "d", &pgtypesPath, "File path to write the sql for the postgres enums. If empty, no sql is written", false)
-	genSubcmd.AddFlag(goflag.FlagString, "typescript", "t", &tsTypesPath, "File path to write the typescript types. If empty, no typescript is written", false)
-
-	if len(os.Args) < 2 {
-		ctx.PrintUsage(os.Stderr)
-		os.Exit(1)
+	// If config file already exists, print message and return
+	if _, err := os.Stat(configName); err == nil {
+		fmt.Println(configName, "already initialized")
+		return
 	}
 
-	// Parse flags
-	matchingSubcommand, err := ctx.Parse(os.Args)
+	// Write default text to config
+	err := os.WriteFile(configName, configData, 0644)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("error creating config file: %v\n", err)
 	}
-
-	if matchingSubcommand != nil {
-		matchingSubcommand.Handler()
-		os.Exit(0)
-	}
+	os.Exit(0)
 }
