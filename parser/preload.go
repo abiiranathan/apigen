@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"slices"
 	"sort"
 	"strings"
 )
@@ -20,20 +21,23 @@ func filterPreloads(dependencies map[string][]string) map[string][]string {
 	}
 
 	for model, preloads := range dependencies {
-		uniquePreloads := make([]string, 0)
+		uniquePreloads := make([]string, 0, len(preloads))
 
 		for _, preload := range preloads {
-			isUnique := true
-
-			// Check if the preload is captured by another preload
-			for _, otherPreload := range preloads {
-				if preload != otherPreload && strings.Contains(otherPreload, preload) {
-					isUnique = false
-					break
+			if !slices.Contains(filteredPreloads[model], preload) {
+				// Check if preload is a substring of any other preload
+				// If yes, then skip this preload
+				shouldSkip := false
+				for _, existingPreload := range uniquePreloads {
+					if strings.HasPrefix(existingPreload, preload) {
+						shouldSkip = true
+						break
+					}
 				}
-			}
 
-			if isUnique {
+				if shouldSkip {
+					continue
+				}
 				uniquePreloads = append(uniquePreloads, preload)
 			}
 		}

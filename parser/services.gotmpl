@@ -296,17 +296,48 @@ type {{$ident}}Service interface {
 	// GetPaginated retrieves a paginated list of {{$ident}}s
 	GetPaginated(page int, pageSize int, options ...Option) (*PaginatedResults[{{.ModelPkgName}}.{{.Model}}], error)
 
+	// Override preload
+	PreloadAll(preload bool) {{$ident}}Service
+
+	// Preload overrides the default preloads
+	Preload(query string, args ...any) {{$ident}}Service
 }
 
 // Implementation for {{$ident}}Service interface
 type {{$ident}}Repo struct {
 	DB *gorm.DB
+
+	preloads []string
+	preloadAll bool
+}
+
+
+// PreloadAll sets preloadAll to true or false
+func (repo *{{$ident}}Repo) PreloadAll(preload bool) {{$ident}}Service {
+	repo.preloadAll = preload
+	return repo
+}
+
+// Preload sets the preloads for the service.
+// This is only applied to a copy of the service. The original service is not modified.
+func (repo {{$ident}}Repo) Preload(query string, args ...any) {{$ident}}Service {
+	repo.preloadAll = false
+	repo.DB = repo.DB.Preload(query, args...)
+	return &repo
 }
 
 // Returns a {{$ident}} service that accesses the gorm.DB
 // instance through dependancy injection
 func new{{.Model}}Service(db *gorm.DB) {{$ident}}Service {
-	return &{{$ident}}Repo{DB: db}
+	return &{{$ident}}Repo{
+		DB: db,
+		preloads: []string{
+			{{range $preloadStmt := .Preloads -}}
+				"{{$preloadStmt}}",
+			{{end -}}
+		},
+		preloadAll: {{.PreloadAll}},
+	}
 }
 
 {{ if not .PkgReadOnly }}
@@ -368,9 +399,12 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 
 		var updated{{$ident}} {{.ModelPkgName}}.{{.Model}}
 		db := repo.DB
-		{{range $preloadStmt := .Preloads -}}
-			db = db.Preload("{{$preloadStmt}}")
-		{{end -}}
+
+		if repo.preloadAll {
+			for _, preload := range repo.preloads {
+				db = db.Preload(preload)
+			}
+		}
 
 		db = applyOptions(db, options...)
 		if err := db.First(&updated{{$ident}}, id).Error; err != nil {
@@ -430,9 +464,12 @@ func (repo *{{$ident}}Repo) Rollback() error{
 func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
 	db := repo.DB
-	{{range $preloadStmt := .Preloads -}}
-		db = db.Preload("{{$preloadStmt}}")
-	{{end -}}
+
+	if repo.preloadAll {
+		for _, preload := range repo.preloads {
+			db = db.Preload(preload)
+		}
+	}
 
 	db = applyOptions(db, options...)
 	if err := db.First(&{{$ident}}, id).Error; err != nil {
@@ -445,9 +482,12 @@ func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...Option) ({{.ModelPkgN
 // Retries all {{$ident}}s
 func (repo *{{$ident}}Repo) GetAll(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error) {
 	db := repo.DB
-	{{range $preloadStmt := .Preloads -}}
-    	db = db.Preload("{{$preloadStmt}}")
-	{{end -}}
+
+	if repo.preloadAll {
+		for _, preload := range repo.preloads {
+			db = db.Preload(preload)
+		}
+	}
 
 	db = applyOptions(db, options...)
 	err = db.Find(&results).Error
@@ -481,9 +521,13 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
 
 	// Query the database
 	db := repo.DB
-	{{range $preloadStmt := .Preloads -}}
-    	db = db.Preload("{{$preloadStmt}}")
-	{{end -}}
+
+	if repo.preloadAll {
+		for _, preload := range repo.preloads {
+			db = db.Preload(preload)
+		}
+	}	
+	
 	db = applyOptions(db, options...)
 
 	// Retrieve total count of records after applying options
@@ -513,9 +557,12 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
 func (repo *{{$ident}}Repo) FindOne(options ...Option) ({{.ModelPkgName}}.{{.Model}}, error){
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
 	db := repo.DB
-	{{range $preloadStmt := .Preloads -}}
-    	db = db.Preload("{{$preloadStmt}}")
-	{{end -}}
+
+	if repo.preloadAll {
+		for _, preload := range repo.preloads {
+			db = db.Preload(preload)
+		}
+	}
 
 	db = applyOptions(db, options...)
 	if err := db.First(&{{$ident}}).Error; err != nil {
@@ -526,9 +573,12 @@ func (repo *{{$ident}}Repo) FindOne(options ...Option) ({{.ModelPkgName}}.{{.Mod
 
 func (repo *{{$ident}}Repo) FindMany(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error){
 	db := repo.DB
-	{{range $preloadStmt := .Preloads -}}
-    	db = db.Preload("{{$preloadStmt}}")
-	{{end -}}
+	
+	if repo.preloadAll {
+		for _, preload := range repo.preloads {
+			db = db.Preload(preload)
+		}
+	}
 	
 	db = applyOptions(db, options...)
 	err = db.Find(&results).Error

@@ -1,23 +1,38 @@
 # apigen configuration file.
 # Strings should use single quotes
 
-[Models]
+# PreloadAll all relationships with gorm.Preload
+PreloadAll = false
 
+[Models]
+# ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [
   'github.com/abiiranathan/apigen/models',
   'github.com/abiiranathan/apigen/views',
 ]
 
+# Skip is a list of models to skip. Names are case sensitive
 Skip = []
+
+# ReadOnly is a list of models that should not be generated with CRUD operations
+# Only Get methods will be generated for these models.
 ReadOnly = ['github.com/abiiranathan/apigen/views']
 
+
 [Output]
+
+# OutDir is the directory to write the generated files to
 OutDir = '.'
+
+# ServiceName is the name of the service to generate
 ServiceName = 'services'
 
 [overrides]
+# Overrides for types and fields. Forexample, here we are overriding the type
+# as would appear in typescript for Sex to be an enum.
 [overrides.types]
 Sex = '"Male" | "Female"'
 
+# Here we are overriding gener to of type Sex. Sex is a go type.
 [overrides.fields]
 gender = 'Sex'

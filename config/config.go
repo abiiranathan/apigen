@@ -10,7 +10,8 @@ import (
 
 // Config struct represents the configuration parameters
 type Config struct {
-	Models struct {
+	PreloadAll bool `toml:"PreloadAll"` // Preload all the relations
+	Models     struct {
 		Pkgs     []string `toml:"Pkgs"`     // absolute package names where models are located
 		Skip     []string `toml:"Skip"`     // Slice of models(Structs) to skip
 		ReadOnly []string `toml:"ReadOnly"` // For SQL Views

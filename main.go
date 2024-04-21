@@ -20,6 +20,9 @@ var (
 	tsTypesPath   = ""
 )
 
+// go:embed apigen.toml
+var defaultConfig []byte
+
 func defineFlags(ctx *goflag.Context) {
 	// Global flags
 	ctx.AddFlag(goflag.FlagFilePath, "config", "c", &configName, "Path to config filename.", false)
@@ -109,26 +112,14 @@ func generateSubcommand() {
 }
 
 func initConfigFile() {
-	var configData = []byte(`# apigen configuration file.
-# Strings should use single quotes
-
-[Models]
-Pkgs=['github.com/username/module/models']
-Skip=[]
-
-[Output]
-OutDir='.'
-ServiceName='services'
-`)
-
 	// If config file already exists, print message and return
 	if _, err := os.Stat(configName); err == nil {
-		fmt.Println(configName, "already initialized")
-		return
+		fmt.Printf("config file already exists: %s\n", configName)
+		os.Exit(0)
 	}
 
 	// Write default text to config
-	err := os.WriteFile(configName, configData, 0644)
+	err := os.WriteFile(configName, defaultConfig, 0644)
 	if err != nil {
 		log.Fatalf("error creating config file: %v\n", err)
 	}

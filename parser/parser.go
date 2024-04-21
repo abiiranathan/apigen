@@ -272,6 +272,7 @@ func Map(data []StructMeta) (m map[string]StructMeta) {
 }
 
 type tmplData struct {
+	PreloadAll   bool       // Preload all the relations
 	PkgName      string     // Package name for the generated service.
 	ModelPkg     string     // Absolute name of package e.g "github.com/abiiranathan/todos/models"
 	ModelPkgs    []string   // Absolute names of all package e.g ["github.com/abiiranathan/todos/models"]
@@ -324,6 +325,7 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 		}
 
 		data := tmplData{
+			PreloadAll:   cfg.PreloadAll,
 			PkgName:      cfg.Output.ServiceName,
 			ModelPkg:     st.Package,
 			ModelPkgs:    cfg.Models.Pkgs,
