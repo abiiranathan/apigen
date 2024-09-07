@@ -53,6 +53,16 @@ func Where(query string, args...any) Option{
 	}
 }
 
+func WhereIf(condition bool, query string, args...any) Option{
+    return func(db *gorm.DB) *gorm.DB{
+        if condition {
+            db = db.Where(query, args...)
+        }
+        return db
+    }
+}
+
+
 // Helper function to create pass a single Where clause.
 // This is different from the Where Option.
 func WHERE(query string, args...any) *Options{
@@ -222,6 +232,8 @@ func Assign(attrs ...any) Option{
 }
 
 // DateRange applies date range filter on a date column
+// e.g DateRange("DATE(created_at)", "2021-01-01", "2021-12-31")
+// It does nothing if start or end is empty.
 func DateRange(column string, start, end string) Option{
 	return func(db *gorm.DB) *gorm.DB{
 		if start != "" && end != "" {
@@ -233,6 +245,39 @@ func DateRange(column string, start, end string) Option{
 		}
 		return db
 	}
+}
+
+
+// MothRange is the same as date range but truncates the date to month
+// e.g MonthRange("DATE(created_at)", "2021-01-01", "2021-12-31")
+// It does nothing if start or end is empty.
+func MonthRange(column string, start, end string) Option{
+    return func(db *gorm.DB) *gorm.DB{
+        if start != "" && end != "" {
+            db = db.Where(column +" BETWEEN DATE_TRUNC('month', ?::DATE) AND DATE_TRUNC('month', ?::DATE)", start, end)
+        }else if start != "" {
+            db = db.Where(column +" >= DATE_TRUNC('month', ?::DATE)", start)
+        }else if end != "" {
+            db = db.Where(column +" <= DATE_TRUNC('month', ?::DATE)", end)
+        }
+        return db
+    }
+}
+
+// YearRange is the same as date range but truncates the date to year
+// e.g YearRange("DATE(created_at)", "2021-01-01", "2024-12-31")
+// It does nothing if start or end is empty.
+func YearRange(column string, start, end string) Option{
+    return func(db *gorm.DB) *gorm.DB{
+        if start != "" && end != "" {
+            db = db.Where(column +" BETWEEN DATE_TRUNC('year', ?::DATE) AND DATE_TRUNC('year', ?::DATE)", start, end)
+        }else if start != "" {
+            db = db.Where(column +" >= DATE_TRUNC('year', ?::DATE)", start)
+        }else if end != "" {
+            db = db.Where(column +" <= DATE_TRUNC('year', ?::DATE)", end)
+        }
+        return db
+    }
 }
 
 
