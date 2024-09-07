@@ -8,6 +8,7 @@ import (
 		"{{ . }}"
 	{{- end }}
 	"gorm.io/gorm"
+    "gorm.io/gorm/clause"
 	"database/sql"
 	"math"
 )
@@ -27,7 +28,15 @@ Preferred order of option: Select,Group, Where, Or, Joins, Preload, Order, Limit
 type Option func(db *gorm.DB)*gorm.DB
 
 // Options is a list of Option
+// It has methods to update the options in-place like Where, ILIKE, Order etc.
+// Preferred order of options: Select, Group, Where, Or, Joins, Preload, Order, Limit, Offset, etc
 type Options []Option
+
+// NewOptions creates a new Options slice with the specified capacity
+func NewOptions(capacity int) *Options {
+    opts := make(Options, 0, capacity)
+    return &opts
+}
 
 /*
 Where add conditions
@@ -79,7 +88,6 @@ func Omit(columns ...string) Option{
 	}
 }
 
-
 // Order("name DESC")
 func Order(order string) Option{
 	return func(db *gorm.DB) *gorm.DB{
@@ -87,7 +95,6 @@ func Order(order string) Option{
 		return db
 	}
 }
-
 
 // Select("name, sum(age) as total"), Group("name")
 func Group(group string) Option{
@@ -114,7 +121,6 @@ func Limit(limit int) Option{
 		return db
 	}
 }
-
 
 // Distinct(args ...any) - Specify Distinct columns
 func Distinct(args ...any) Option{
@@ -151,6 +157,31 @@ func Or(query interface{}, args ...interface{}) Option{
 		return db
 	}
 }
+
+// Specify table name to run the query
+func Table(name string) Option{
+    return func(db *gorm.DB) *gorm.DB{
+        db = db.Table(name)
+        return db
+    }
+}
+
+// Clauses accepts multiple conditions 
+func Clauses(conds ...clause.Expression) Option{
+    return func(db *gorm.DB) *gorm.DB{
+        db = db.Clauses(conds...)
+        return db
+    }
+}
+
+// Not clause to exclude records that match the condition
+func Not(query interface{}, args ...interface{}) Option{
+    return func(db *gorm.DB) *gorm.DB{
+		db = db.Not(query, args...)
+		return db
+	}
+}
+
 
 // Scopes pass current database connection to arguments `func(db *gorm.DB) *gorm.DB`, which could be used to add conditions dynamically
 func Scopes(funcs ...func(db *gorm.DB) *gorm.DB) Option{
@@ -210,13 +241,156 @@ func ILIKE(column, value string) Option{
 	}
 }
 
-func applyOptions(db *gorm.DB, options ...Option) *gorm.DB {
-	for _, option := range options{
+func applyOptions(db *gorm.DB, options ...*Options) *gorm.DB {
+    // we care about the first options only
+    if(len(options) == 0){
+        return db
+    }
+    opts := *options[0]
+
+	for _, option := range opts{
 		db = option(db)
 	}
 	return db
 }
 
+func (opts *Options) Where(query string, args ...any) *Options {
+    *opts = append(*opts, Where(query, args...))
+    return opts
+}
+
+
+func (opts *Options) WhereIf(condition bool, query string, args ...any) *Options {
+    if condition {
+        *opts = append(*opts, Where(query, args...))
+    }
+    return opts
+}
+
+// Select adds a Select clause to the options
+func (opts *Options) Select(columns ...string) *Options {
+    *opts = append(*opts, Select(columns...))
+    return opts
+}
+
+// Preload adds a Preload clause to the options
+func (opts *Options) Preload(query string, args ...any) *Options {
+    *opts = append(*opts, Preload(query, args...))
+    return opts
+}
+
+// Order adds an Order clause to the options
+func (opts *Options) Order(order string) *Options{
+    *opts = append(*opts, Order(order))
+    return opts
+}
+
+// Limit adds a Limit clause to the options
+func (opts *Options) Limit(limit int) *Options {
+    *opts = append(*opts, Limit(limit))
+    return opts
+}
+
+// Offset adds an Offset clause to the options
+func (opts *Options) Offset(offset int) *Options {
+    *opts = append(*opts, Offset(offset))
+    return opts
+}
+
+// Joins adds a Joins clause to the options
+func (opts *Options) Joins(query string, args ...interface{}) *Options {
+    *opts = append(*opts, Joins(query, args...))
+    return opts
+}
+
+// Group adds a Group clause to the options
+func (opts *Options) Group(group string) *Options {
+    *opts = append(*opts, Group(group))
+    return opts
+}
+
+// Having adds a Having clause to the options
+func (opts *Options) Having(query interface{}, args ...interface{}) *Options {
+    *opts = append(*opts, Having(query, args...))
+    return opts
+}
+
+// Distinct adds a Distinct clause to the options
+func (opts *Options) Distinct(args ...any) *Options {
+    *opts = append(*opts, Distinct(args...))
+    return opts
+}
+
+// Or adds an Or clause to the options
+func (opts *Options) Or(query interface{}, args ...interface{}) *Options {
+    *opts = append(*opts, Or(query, args...))
+    return opts
+}
+
+// Scopes adds Scopes to the options
+func (opts *Options) Scopes(funcs ...func(db *gorm.DB) *gorm.DB) *Options {
+    *opts = append(*opts, Scopes(funcs...))
+    return opts
+}
+
+// Unscoped adds an Unscoped clause to the options
+func (opts *Options) Unscoped() *Options {
+    *opts = append(*opts, Unscoped())
+    return opts
+}
+
+// DateRange adds a date range filter to the options
+func (opts *Options) DateRange(column string, start, end string) *Options {
+    *opts = append(*opts, DateRange(column, start, end))
+    return opts
+}
+
+// ILIKE adds a case-insensitive search to the options
+func (opts *Options) ILIKE(column, value string) *Options {
+    *opts = append(*opts, ILIKE(column, value))
+    return opts
+}
+
+// Table configures the table name for the query
+func (opts *Options) Table(name string) *Options {
+    *opts = append(*opts, Table(name))
+    return opts
+}
+
+// Clauses adds multiple conditions to the options
+func (opts *Options) Clauses(conds ...clause.Expression) *Options {
+    *opts = append(*opts, Clauses(conds...))
+    return opts
+}
+
+// Not adds a Not clause to the options
+func (opts *Options) Not(query interface{}, args ...interface{}) *Options {
+    *opts = append(*opts, Not(query, args...))
+    return opts
+}
+
+// Attrs adds an Attrs clause to the options
+func (opts *Options) Attrs(attrs ...any) *Options {
+    *opts = append(*opts, Attrs(attrs...))
+    return opts
+}
+
+// Assign provide attributes used in FirstOrCreate or FirstOrInit
+//
+// Assign adds attributes even if the record is found. 
+// If using FirstOrCreate, this means that records will be updated even if they are found.
+// See db.Assign gorm docs for more details.
+func (opts *Options) Assign(attrs ...any) *Options {
+    *opts = append(*opts, Assign(attrs...))
+    return opts
+}
+
+// Append a new option to options and return updated options
+// This allows chaining of options.
+func (opts *Options) Append(option Option) *Options {
+    *opts = append(*opts, option)
+    return opts
+}
 
 // PaginatedResults defines options for paginated queries.
 type PaginatedResults[T any] struct {
@@ -239,14 +413,14 @@ type PaginatedResults[T any] struct {
 type {{$ident}}Service interface {
 	{{ if not .PkgReadOnly }}
 		// Create new {{$ident}}
-		Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) error
+		Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options) error
 
 		// Create multiple {{$ident}}s
-		CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...Option) error
+		CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...*Options) error
 
 		{{ if ne $pkType "" }}
 			// Update {{$ident}} with all the fields. Uses gorm.DB.Save()
-			Update({{$ident}}Id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
+			Update({{$ident}}Id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
 		{{ end }}
 
 		// Update a single column with specified conditions
@@ -254,7 +428,7 @@ type {{$ident}}Service interface {
 
 		{{ if ne $pkType "" }}
 			// PartialUpdate for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
-			PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
+			PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
 		{{ end }}
 
 		{{ if ne $pkType "" }}
@@ -278,23 +452,23 @@ type {{$ident}}Service interface {
 
 	{{ if ne $pkType "" }}
 		// Get a single {{$ident}} by id (primary key)
-		Get(id {{$pkType}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
+		Get(id {{$pkType}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
 	{{ end }}
 
 	// Retrieves all {{$ident}}s from the database
-	GetAll(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error)
+	GetAll(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error)
 
 	// Count returns the number of records matching the query
-	Count(options ...Option) (int64, error)
+	Count(options ...*Options) (int64, error)
 
 	// Find the first record matching condition specified by query &amp; args
-	FindOne(options ...Option) ({{.ModelPkgName}}.{{.Model}}, error)
+	FindOne(options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
 
 	// Find all records matching condition specified by query &amp; args
-	FindMany(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error)
+	FindMany(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error)
 
 	// GetPaginated retrieves a paginated list of {{$ident}}s
-	GetPaginated(page int, pageSize int, options ...Option) (*PaginatedResults[{{.ModelPkgName}}.{{.Model}}], error)
+	GetPaginated(page int, pageSize int, options ...*Options) (*PaginatedResults[{{.ModelPkgName}}.{{.Model}}], error)
 
 	// Override preload
 	PreloadAll(preload bool) {{$ident}}Service
@@ -342,7 +516,7 @@ func new{{.Model}}Service(db *gorm.DB) {{$ident}}Service {
 
 {{ if not .PkgReadOnly }}
 // Create new {{$ident}}
-func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...Option) error {
+func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...*Options) error {
 	if err := repo.DB.Omit({{ join .OmitFields ","}}).Create({{$ident}}s).Error; err != nil{
 		return err
 	}
@@ -359,7 +533,7 @@ func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model
 }
 
 // Create new {{$ident}}
-func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...Option) error {
+func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options) error {
 	if err := repo.DB.Omit({{ join .OmitFields ","}}).Create({{$ident}}).Error; err != nil{
 		return err
 	}
@@ -375,7 +549,7 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 
 {{ if ne $pkType "" }}
 	// Update {{$ident}} with all the fields. Uses gorm.DB.Save()
-	func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
+	func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options...*Options) ({{.ModelPkgName}}.{{.Model}}, error) {
 		// Make sure the ID is set on object to use Save(), otherwise you get unique constraint error.
 		{{$ident}}.ID = id
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Save({{$ident}}).Error; err != nil {
@@ -392,7 +566,7 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 
 {{ if ne $pkType "" }}
 	// PartialUpdate for {{$ident}}. Only updates fields with no zero values. Returns the updated {{$ident}}
-	func (repo *{{$ident}}Repo) PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
+	func (repo *{{$ident}}Repo) PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options...*Options) ({{.ModelPkgName}}.{{.Model}}, error) {
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates({{$ident}}).Error; err != nil {
 			return {{.ModelPkgName}}.{{.Model}}{}, err
 		}
@@ -461,7 +635,7 @@ func (repo *{{$ident}}Repo) Rollback() error{
 // Get a single {{$ident}} by id primary key
 // Warning: Do not pass Where() option in options when using id, you will get unexpected results.
 // (unless that's what you want!)
-func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...Option) ({{.ModelPkgName}}.{{.Model}}, error) {
+func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error) {
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
 	db := repo.DB
 
@@ -480,7 +654,7 @@ func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...Option) ({{.ModelPkgN
 {{ end }}
 
 // Retries all {{$ident}}s
-func (repo *{{$ident}}Repo) GetAll(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error) {
+func (repo *{{$ident}}Repo) GetAll(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error) {
 	db := repo.DB
 
 	if repo.preloadAll {
@@ -495,7 +669,7 @@ func (repo *{{$ident}}Repo) GetAll(options ...Option) (results []{{.ModelPkgName
 }
 
 // Count returns the number of records matching the query
-func (repo *{{$ident}}Repo) Count(options ...Option) (int64, error) {
+func (repo *{{$ident}}Repo) Count(options ...*Options) (int64, error) {
 	var count int64
 	db := repo.DB
 	db = applyOptions(db, options...)
@@ -506,7 +680,7 @@ func (repo *{{$ident}}Repo) Count(options ...Option) (int64, error) {
 }
 
 // GetPaginated retrieves a paginated list of users
-func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Option) (
+func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Options) (
 	*PaginatedResults[{{.ModelPkgName}}.{{.Model}}], error) {
 
 	var results []{{.ModelPkgName}}.{{.Model}}
@@ -554,7 +728,7 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...Opti
 }
 
 
-func (repo *{{$ident}}Repo) FindOne(options ...Option) ({{.ModelPkgName}}.{{.Model}}, error){
+func (repo *{{$ident}}Repo) FindOne(options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error){
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
 	db := repo.DB
 
@@ -571,7 +745,7 @@ func (repo *{{$ident}}Repo) FindOne(options ...Option) ({{.ModelPkgName}}.{{.Mod
 	return {{$ident}}, nil
 }
 
-func (repo *{{$ident}}Repo) FindMany(options ...Option) (results []{{.ModelPkgName}}.{{.Model}}, err error){
+func (repo *{{$ident}}Repo) FindMany(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error){
 	db := repo.DB
 	
 	if repo.preloadAll {

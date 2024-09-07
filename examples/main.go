@@ -83,6 +83,19 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	options := services.NewOptions(4).
+		Where("name = ?", "Go").
+		WhereIf(role.ID != 0, "role_id = ?", role.ID).
+		Append(services.Order("id desc"))
+
+	// fetch tag
+	tag, err = tx.TagService.Get(tag.ID, options)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	log.Println("Tag:", tag)
+
 	// create a new issue
 	issue := models.Issue{
 		Name: "Issue 1",
