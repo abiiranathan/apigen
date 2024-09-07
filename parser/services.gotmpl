@@ -53,6 +53,12 @@ func Where(query string, args...any) Option{
 	}
 }
 
+// Helper function to create pass a single Where clause.
+// This is different from the Where Option.
+func WHERE(query string, args...any) *Options{
+    return &Options{Where(query, args...)}
+}
+
 /*
 Preload preload associations with given conditions
 
@@ -385,12 +391,21 @@ func (opts *Options) Assign(attrs ...any) *Options {
     return opts
 }
 
-// Append a new option to options and return updated options
+// Append new options and return updated options
 // This allows chaining of options.
-func (opts *Options) Append(option Option) *Options {
-    *opts = append(*opts, option)
+func (opts *Options) Append(option ...Option) *Options {
+    *opts = append(*opts, option...)
     return opts
 }
+
+// Append options only if condition is true
+func (opts *Options) AppendIf(condition bool, option ...Option) *Options {
+    if condition {
+        *opts = append(*opts, option...)
+    }
+    return opts
+}
+
 
 // PaginatedResults defines options for paginated queries.
 type PaginatedResults[T any] struct {
