@@ -53,6 +53,14 @@ func Where(query string, args...any) Option{
 	}
 }
 
+// Model sets the model to use for the query
+func Model(value interface{}) Option{
+    return func(db *gorm.DB) *gorm.DB{
+        db = db.Model(value)
+        return db
+    }
+}
+
 func WhereIf(condition bool, query string, args...any) Option{
     return func(db *gorm.DB) *gorm.DB{
         if condition {
@@ -393,6 +401,24 @@ func (opts *Options) Unscoped() *Options {
 // DateRange adds a date range filter to the options
 func (opts *Options) DateRange(column string, start, end string) *Options {
     *opts = append(*opts, DateRange(column, start, end))
+    return opts
+}
+
+// MonthRange adds a month range filter to the options
+func (opts *Options) MonthRange(column string, start, end string) *Options {
+    *opts = append(*opts, MonthRange(column, start, end))
+    return opts
+}
+
+// YearRange adds a year range filter to the options
+func (opts *Options) YearRange(column string, start, end string) *Options {
+    *opts = append(*opts, YearRange(column, start, end))
+    return opts
+}
+
+// Model sets the model to use for the query
+func (opts *Options) Model(value interface{}) *Options {
+    *opts = append(*opts, Model(value))
     return opts
 }
 
