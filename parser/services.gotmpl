@@ -477,6 +477,10 @@ func (opts *Options) AppendIf(condition bool, option ...Option) *Options {
     return opts
 }
 
+// Apply the options to the db instance and return the updated db instance
+func (opts *Options) Apply(db *gorm.DB) *gorm.DB {
+    return applyOptions(db, opts)
+}
 
 // PaginatedResults defines options for paginated queries.
 type PaginatedResults[T any] struct {
