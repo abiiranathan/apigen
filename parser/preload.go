@@ -1,50 +1,39 @@
 package parser
 
 import (
-	"slices"
 	"sort"
 	"strings"
 )
 
-// filterPreloads returns a map of the longest unique strings representing the Gorm preload string.
-// Keys are Model(Struct) names.
-// Forexample: {"User": []string{"Profile", "Profile.Addresses", "Profile.Cards"}}
-// can omit "Profile" since its captured in other 2.
 func filterPreloads(dependencies map[string][]string) map[string][]string {
 	filteredPreloads := make(map[string][]string)
 
-	// Sort dependencies in descending order
-	for _, deps := range dependencies {
-		sort.Slice(deps, func(i, j int) bool {
-			return len(deps[i]) > len(deps[j])
-		})
-	}
-
 	for model, preloads := range dependencies {
+		// Sort preloads by length in descending order
+		sort.Slice(preloads, func(i, j int) bool {
+			return len(preloads[i]) > len(preloads[j])
+		})
+
 		uniquePreloads := make([]string, 0, len(preloads))
-
 		for _, preload := range preloads {
-			if !slices.Contains(filteredPreloads[model], preload) {
-				// Check if preload is a substring of any other preload
-				// If yes, then skip this preload
-				shouldSkip := false
-				for _, existingPreload := range uniquePreloads {
-					if strings.HasPrefix(existingPreload, preload) {
-						shouldSkip = true
-						break
-					}
+			isUnique := true
+			for i := 0; i < len(uniquePreloads); i++ {
+				if strings.HasPrefix(preload+".", uniquePreloads[i]+".") {
+					// Current preload is a parent of an existing preload, replace it
+					uniquePreloads = append(uniquePreloads[:i], uniquePreloads[i+1:]...)
+					i--
+				} else if strings.HasPrefix(uniquePreloads[i]+".", preload+".") {
+					// Current preload is a child of an existing preload, skip it
+					isUnique = false
+					break
 				}
-
-				if shouldSkip {
-					continue
-				}
+			}
+			if isUnique {
 				uniquePreloads = append(uniquePreloads, preload)
 			}
 		}
-
 		filteredPreloads[model] = uniquePreloads
 	}
-
 	return filteredPreloads
 }
 
