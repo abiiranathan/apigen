@@ -272,18 +272,23 @@ func Map(data []StructMeta) (m map[string]StructMeta) {
 }
 
 type tmplData struct {
-	PreloadAll   bool       // Preload all the relations
-	PkgName      string     // Package name for the generated service.
-	ModelPkg     string     // Absolute name of package e.g "github.com/abiiranathan/todos/models"
-	ModelPkgs    []string   // Absolute names of all package e.g ["github.com/abiiranathan/todos/models"]
-	ModelPkgName string     // Name of package e.g "models"
-	PkgReadOnly  bool       // For SQL Views
-	ModelObj     StructMeta // The model metadata object
-	Model        string     // The struct name e.g "User"
-	WritePKGDecl bool
-	OmitFields   []string // ForeignKey fields to Omit during Update
-	Preloads     []string // Stores fields to preload
-	SkipService  bool     // Whether to skip creating this service
+	PkgName      string   // Package name for the generated service.
+	ModelPkg     string   // Absolute name of package e.g "github.com/abiiranathan/todos/models"
+	ModelPkgs    []string // Absolute names of all package e.g ["github.com/abiiranathan/todos/models"]
+	ModelPkgName string   // Name of package e.g "models"
+
+	ModelObj   StructMeta // The model metadata object
+	Model      string     // The struct name e.g "User"
+	OmitFields []string   // ForeignKey fields to Omit during Update
+	Preloads   []string   // Stores fields to preload
+
+	DefaultAllocSize uint // Default size for slices
+
+	PreloadAll        bool // Preload all the relations
+	PkgReadOnly       bool // For SQL Views
+	WritePKGDecl      bool
+	SkipService       bool // Whether to skip creating this service
+	PreallocateSlices bool // Preallocate slices
 }
 
 func packageReadOnly(cfg *config.Config, pkg string) bool {
@@ -295,7 +300,7 @@ func packageReadOnly(cfg *config.Config, pkg string) bool {
 //
 // If models in skipServices are ignored.
 func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, error) {
-	preloads := GetPreloadMap(structs)
+	preloads := GetPreloadMap(structs, cfg.PreloadDepth)
 	buf := new(bytes.Buffer)
 	modelNames := make([]string, 0, len(structs))
 

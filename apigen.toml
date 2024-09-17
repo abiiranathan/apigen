@@ -4,6 +4,11 @@
 # PreloadAll all relationships with gorm.Preload
 PreloadAll = false
 
+# PreloadDepth is the depth of the relationships to preload
+# e.g Patient.Visit.Doctor will be preloaded if PreloadDepth is 3
+PreloadDepth = 3
+
+
 [Models]
 # ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [

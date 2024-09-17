@@ -21,7 +21,8 @@ type Config struct {
 		ServiceName string `toml:"ServiceName"` // simple name for the services default: services
 		OutDir      string `toml:"OutDir"`      // Directory where to create new packages: default "."
 	} `toml:"Output"`
-	Overrides Overrides `toml:"overrides"`
+	Overrides    Overrides `toml:"overrides"`
+	PreloadDepth uint      `toml:"PreloadDepth"` // Preload depth for nested relations
 }
 
 type Overrides struct {

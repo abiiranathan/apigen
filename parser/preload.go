@@ -1,83 +1,84 @@
 package parser
 
 import (
-	"sort"
+	"fmt"
+	"slices"
 	"strings"
 )
 
-func filterPreloads(dependencies map[string][]string) map[string][]string {
-	filteredPreloads := make(map[string][]string)
+// dedupePreloads removes redundant preloads where a prefix is a subset of another preload.
+func dedupePreloads(preloads []string) []string {
+	if len(preloads) == 0 {
+		return preloads
+	}
 
-	for model, preloads := range dependencies {
-		// Sort preloads by length in descending order
-		sort.Slice(preloads, func(i, j int) bool {
-			return len(preloads[i]) > len(preloads[j])
-		})
+	uniquePreloads := make([]string, 0, len(preloads))
 
-		uniquePreloads := make([]string, 0, len(preloads))
-		for _, preload := range preloads {
-			isUnique := true
-			for i := 0; i < len(uniquePreloads); i++ {
-				if strings.HasPrefix(preload+".", uniquePreloads[i]+".") {
-					// Current preload is a parent of an existing preload, replace it
-					uniquePreloads = append(uniquePreloads[:i], uniquePreloads[i+1:]...)
-					i--
-				} else if strings.HasPrefix(uniquePreloads[i]+".", preload+".") {
-					// Current preload is a child of an existing preload, skip it
-					isUnique = false
-					break
-				}
-			}
-			if isUnique {
-				uniquePreloads = append(uniquePreloads, preload)
+	for _, preload := range preloads {
+		isUnique := true
+		for i, unique := range uniquePreloads {
+			if strings.HasPrefix(preload+".", unique+".") {
+				uniquePreloads = append(uniquePreloads[:i], uniquePreloads[i+1:]...)
+			} else if strings.HasPrefix(unique+".", preload+".") {
+				isUnique = false
+				break
 			}
 		}
-		filteredPreloads[model] = uniquePreloads
+		if isUnique {
+			uniquePreloads = append(uniquePreloads, preload)
+		}
 	}
-	return filteredPreloads
+
+	// sort them name then from short to long
+	slices.SortStableFunc(uniquePreloads, func(i, j string) int {
+		return strings.Compare(i, j)
+	})
+	return uniquePreloads
 }
 
-// GetPreloadMap returns a map of preload statements for each table.
-// Preload statements are generated for all foreignKey fields and many2many fields.
-// Forexample:
-//
-//	[User][]string{"Profile.Avatars"}
-func GetPreloadMap(structs []StructMeta) map[string][]string {
-	inputs := Map(structs)
-	dict := make(map[string][]string)
+// GetPreloadMap returns a map of struct names to their respective preload fields, including nested relationships.
+func GetPreloadMap(structs []StructMeta, preloadDepth uint) map[string][]string {
+	preloads := make(map[string][]string)
 
-	var visit func(structName string, visited map[string]bool) []string
-	visit = func(structName string, visited map[string]bool) []string {
-		if visited[structName] {
-			// This struct has already been visited,
-			// to avoid cycles we return an empty list of dependencies
-			return []string{}
-		}
+	for _, st := range structs {
+		preloadFields := getPreloadFieldsRecursive(st, structs, "", 0, int(preloadDepth))
+		preloads[st.Name] = preloadFields
+	}
 
-		visited[structName] = true
-		s := inputs[structName]
+	for key, fields := range preloads {
+		preloads[key] = dedupePreloads(fields)
+	}
+	return preloads
+}
 
-		var dependencies []string
-		for _, field := range s.Fields {
-			if field.Preload {
-				dependencies = append(dependencies, field.Name)
+func getPreloadFieldsRecursive(st StructMeta, allStructs []StructMeta, prefix string, depth int, maxDepth int) []string {
+	preloadFields := make([]string, 0)
 
-				// Get field dependencies if any
-				if _, ok := inputs[field.BaseType]; ok {
-					fieldDependencies := visit(field.BaseType, visited)
-					for _, dep := range fieldDependencies {
-						dependencies = append(dependencies, field.Name+"."+dep)
+	for _, field := range st.Fields {
+		if field.Preload {
+			preloadFields = append(preloadFields, field.Name)
+
+			for _, nestedStruct := range allStructs {
+				if nestedStruct.Name == field.BaseType {
+					if !strings.Contains(prefix, fmt.Sprintf(".%s.", field.Name)) {
+						// Build the new prefix for the recursive call
+						newPrefix := fmt.Sprintf("%s.%s.", prefix, field.Name)
+
+						newDepth := depth + 1
+
+						// Only call recursively if we haven't reached the max depth
+						if newDepth <= maxDepth {
+							nestedPreloadFields := getPreloadFieldsRecursive(nestedStruct, allStructs, newPrefix, newDepth, maxDepth)
+							for _, nestedField := range nestedPreloadFields {
+								// Append the nested preload with the current field name
+								preloadFields = append(preloadFields, fmt.Sprintf("%s.%s", field.Name, nestedField))
+							}
+						}
 					}
 				}
 			}
 		}
-		return dependencies
 	}
 
-	for _, s := range structs {
-		visited := make(map[string]bool)
-		dict[s.Name] = visit(s.Name, visited)
-	}
-
-	return filterPreloads(dict)
+	return preloadFields
 }
