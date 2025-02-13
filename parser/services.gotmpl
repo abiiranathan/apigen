@@ -7,6 +7,7 @@ import (
 	{{ range .ModelPkgs }}
 		"{{ . }}"
 	{{- end }}
+	"context"
 	"gorm.io/gorm"
     "gorm.io/gorm/clause"
 	"database/sql"
@@ -300,6 +301,13 @@ func ILIKE(column, value string) Option{
 	}
 }
 
+func WithContext(ctx context.Context) Option {
+	return func(db *gorm.DB) *gorm.DB{
+		db = db.WithContext(ctx)
+		return db
+	}
+}
+
 func applyOptions(db *gorm.DB, options ...*Options) *gorm.DB {
     // we care about the first options only
     if(len(options) == 0){
@@ -428,6 +436,12 @@ func (opts *Options) ILIKE(column, value string) *Options {
     return opts
 }
 
+// WithContext applies custom context to be passed to GORM.
+func (opts *Options) WithContext(ctx context.Context) *Options {
+    *opts = append(*opts, WithContext(ctx))
+    return opts
+}
+
 // Table configures the table name for the query
 func (opts *Options) Table(name string) *Options {
     *opts = append(*opts, Table(name))
@@ -494,7 +508,6 @@ type PaginatedResults[T any] struct {
 }
 
 {{ end }}
-
 
 {{ $ident:=.Model | ToLower }}
 {{ $pkType := .ModelObj.PKType }}
