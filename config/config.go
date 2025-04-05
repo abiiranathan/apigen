@@ -16,7 +16,6 @@ type Config struct {
 		Skip     []string `toml:"Skip"`     // Slice of models(Structs) to skip
 		ReadOnly []string `toml:"ReadOnly"` // For SQL Views
 	} `toml:"Models"`
-
 	Output struct {
 		ServiceName string `toml:"ServiceName"` // simple name for the services default: services
 		OutDir      string `toml:"OutDir"`      // Directory where to create new packages: default "."

@@ -276,7 +276,6 @@ type tmplData struct {
 	ModelPkg     string   // Absolute name of package e.g "github.com/abiiranathan/todos/models"
 	ModelPkgs    []string // Absolute names of all package e.g ["github.com/abiiranathan/todos/models"]
 	ModelPkgName string   // Name of package e.g "models"
-
 	ModelObj   StructMeta // The model metadata object
 	Model      string     // The struct name e.g "User"
 	OmitFields []string   // ForeignKey fields to Omit during Update

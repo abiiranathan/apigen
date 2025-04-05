@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -20,7 +21,7 @@ var (
 	tsTypesPath   = ""
 )
 
-// go:embed apigen.toml
+//go:embed apigen.toml
 var defaultConfig []byte
 
 func defineFlags(ctx *goflag.Context) {
@@ -29,11 +30,11 @@ func defineFlags(ctx *goflag.Context) {
 
 	// Subcommands
 	ctx.AddSubCommand("init", "Initialize project and generate apigen.toml", initConfigFile)
-	genSubcmd := ctx.AddSubCommand("generate", "Generate code", generateSubcommand)
+	gen := ctx.AddSubCommand("generate", "Generate code", generateCode)
 
-	genSubcmd.AddFlag(goflag.FlagBool, "enums", "e", &generateEnums, "Generate enums code present in the package.", false)
-	genSubcmd.AddFlag(goflag.FlagString, "pgtypes", "d", &pgtypesPath, "File path to write the sql for the postgres enums. If empty, no sql is written", false)
-	genSubcmd.AddFlag(goflag.FlagString, "typescript", "t", &tsTypesPath, "File path to write the typescript types. If empty, no typescript is written", false)
+	gen.AddFlag(goflag.FlagBool, "enums", "e", &generateEnums, "Generate enums code present in the package.", false)
+	gen.AddFlag(goflag.FlagString, "pgtypes", "d", &pgtypesPath, "File path to write the sql for the postgres enums. If empty, no sql is written", false)
+	gen.AddFlag(goflag.FlagString, "typescript", "t", &tsTypesPath, "File path to write the typescript types. If empty, no typescript is written", false)
 }
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 	}
 }
 
-func generateSubcommand() {
+func generateCode() {
 	// Load configuration file
 	cfg, err := config.LoadConfig(configName)
 	if err != nil {
@@ -87,7 +88,6 @@ func generateSubcommand() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-
 	}
 
 	// If tsTypesPath is not empty generate the types

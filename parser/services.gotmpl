@@ -523,7 +523,7 @@ type {{$ident}}Service interface {
 
 		{{ if ne $pkType "" }}
 			// Update {{$ident}} with all the fields. Uses gorm.DB.Save()
-			Update({{$ident}}Id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
+			Update({{$ident}}Id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error)
 		{{ end }}
 
 		// Update a single column with specified conditions
@@ -531,7 +531,10 @@ type {{$ident}}Service interface {
 
 		{{ if ne $pkType "" }}
 			// PartialUpdate for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
-			PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
+			PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options ...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error)
+
+			// PartialUpdateWithMap for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
+			PartialUpdateWithMap(id {{$pkType}}, data map[string]any, options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error)
 		{{ end }}
 
 		{{ if ne $pkType "" }}
@@ -555,23 +558,23 @@ type {{$ident}}Service interface {
 
 	{{ if ne $pkType "" }}
 		// Get a single {{$ident}} by id (primary key)
-		Get(id {{$pkType}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
+		Get(id {{$pkType}}, options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error)
 	{{ end }}
 
 	// Retrieves all {{$ident}}s from the database
-	GetAll(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error)
+	GetAll(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error)
 
 	// Count returns the number of records matching the query
 	Count(options ...*Options) (int64, error)
 
-	// Find the first record matching condition specified by query &amp; args
-	FindOne(options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error)
+	// Find the first record matching condition specified by query & args
+	FindOne(options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error)
 
-	// Find all records matching condition specified by query &amp; args
-	FindMany(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error)
+	// Find all records matching condition specified by query & args
+	FindMany(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error)
 
 	// GetPaginated retrieves a paginated list of {{$ident}}s
-	GetPaginated(page int, pageSize int, options ...*Options) (*PaginatedResults[{{.ModelPkgName}}.{{.Model}}], error)
+	GetPaginated(page int, pageSize int, options ...*Options) (*PaginatedResults[*{{.ModelPkgName}}.{{.Model}}], error)
 
 	// Override preload
 	PreloadAll(preload bool) {{$ident}}Service
@@ -626,10 +629,11 @@ func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model
 
 	// Refetch to load associations if any
 	for i, record := range *{{$ident}}s{
-		record, err := repo.Get(record.ID, options...)
+		tmpRecord, err := repo.Get(record.ID, options...)
 		if err != nil {
 			return  err
 		}
+		record = *tmpRecord
 		(*{{$ident}}s)[i]=record
 	}
 	return nil
@@ -642,23 +646,27 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 	}
 
 	// Refetch to load associations if any
-	record, err := repo.Get({{$ident}}.ID, options...)
+	tmpRecord, err := repo.Get({{$ident}}.ID, options...)
 	if err != nil {
 		return  err
 	}
-	*{{$ident}}=record
+
+	*{{$ident}}=*tmpRecord
+
 	return nil
 }
 
 {{ if ne $pkType "" }}
 	// Update {{$ident}} with all the fields. Uses gorm.DB.Save()
-	func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options...*Options) ({{.ModelPkgName}}.{{.Model}}, error) {
+	func (repo *{{$ident}}Repo) Update(id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error) {
 		// Make sure the ID is set on object to use Save(), otherwise you get unique constraint error.
 		{{$ident}}.ID = id
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Save({{$ident}}).Error; err != nil {
-			return {{.ModelPkgName}}.{{.Model}}{}, err
+			return nil, err
 		}
-		return repo.Get(id, options...)
+
+		tmp, err := repo.Get(id, options...)
+		return tmp, err
 	}
 {{ end }}
 
@@ -669,12 +677,12 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 
 {{ if ne $pkType "" }}
 	// PartialUpdate for {{$ident}}. Only updates fields with no zero values. Returns the updated {{$ident}}
-	func (repo *{{$ident}}Repo) PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options...*Options) ({{.ModelPkgName}}.{{.Model}}, error) {
+	func (repo *{{$ident}}Repo) PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error) {
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates({{$ident}}).Error; err != nil {
-			return {{.ModelPkgName}}.{{.Model}}{}, err
+			return nil, err
 		}
 
-		var updated{{$ident}} {{.ModelPkgName}}.{{.Model}}
+		var updated{{$ident}} = new({{.ModelPkgName}}.{{.Model}})
 		db := repo.DB
 
 		if repo.preloadAll {
@@ -684,8 +692,30 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 		}
 
 		db = applyOptions(db, options...)
-		if err := db.First(&updated{{$ident}}, id).Error; err != nil {
-			return {{.ModelPkgName}}.{{.Model}}{}, err
+		if err := db.First(updated{{$ident}}, id).Error; err != nil {
+			return nil, err
+		}
+		return updated{{$ident}}, nil
+	}
+
+	// PartialUpdateWithMap for {{$ident}}. Only updates fields with no zero values. Returns the updated {{$ident}}
+	func (repo *{{$ident}}Repo) PartialUpdateWithMap(id {{$pkType}}, data map[string]any, options...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error) {
+		if err := repo.DB.Omit({{ join .OmitFields ","}}).Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates(data).Error; err != nil {
+			return nil, err
+		}
+
+		var updated{{$ident}} = new({{.ModelPkgName}}.{{.Model}})
+		db := repo.DB
+
+		if repo.preloadAll {
+			for _, preload := range repo.preloads {
+				db = db.Preload(preload)
+			}
+		}
+
+		db = applyOptions(db, options...)
+		if err := db.First(updated{{$ident}}, id).Error; err != nil {
+			return nil, err
 		}
 		return updated{{$ident}}, nil
 	}
@@ -738,7 +768,7 @@ func (repo *{{$ident}}Repo) Rollback() error{
 // Get a single {{$ident}} by id primary key
 // Warning: Do not pass Where() option in options when using id, you will get unexpected results.
 // (unless that's what you want!)
-func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error) {
+func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error) {
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
 	db := repo.DB
 
@@ -750,14 +780,14 @@ func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...*Options) ({{.ModelPk
 
 	db = applyOptions(db, options...)
 	if err := db.First(&{{$ident}}, id).Error; err != nil {
-		return {{.ModelPkgName}}.{{.Model}}{}, err
+		return nil, err
 	}
-	return {{$ident}}, nil
+	return &{{$ident}}, nil
 }
 {{ end }}
 
-// Retries all {{$ident}}s
-func (repo *{{$ident}}Repo) GetAll(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error) {
+// GetAll retries all {{$ident}}s
+func (repo *{{$ident}}Repo) GetAll(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error) {
 	db := repo.DB
 
 	if repo.preloadAll {
@@ -767,7 +797,13 @@ func (repo *{{$ident}}Repo) GetAll(options ...*Options) (results []{{.ModelPkgNa
 	}
 
 	db = applyOptions(db, options...)
+
 	err = db.Find(&results).Error
+
+	if err != nil {
+		return nil, err
+	}
+
 	return
 }
 
@@ -784,9 +820,9 @@ func (repo *{{$ident}}Repo) Count(options ...*Options) (int64, error) {
 
 // GetPaginated retrieves a paginated list of users
 func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Options) (
-	*PaginatedResults[{{.ModelPkgName}}.{{.Model}}], error) {
+	*PaginatedResults[*{{.ModelPkgName}}.{{.Model}}], error) {
 
-	var results []{{.ModelPkgName}}.{{.Model}}
+	var results []*{{.ModelPkgName}}.{{.Model}}
 
 	// Page must be >= 1
 	if page < 1 {
@@ -803,8 +839,8 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Opt
 		for _, preload := range repo.preloads {
 			db = db.Preload(preload)
 		}
-	}	
-	
+	}
+
 	db = applyOptions(db, options...)
 
 	// Retrieve total count of records after applying options
@@ -813,25 +849,26 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Opt
 		return nil, err
 	}
 
-	if err := db.Offset(offset).Limit(pageSize).Find(&results).Error; err != nil{
+	if err := db.Offset(offset).Limit(pageSize).Find(&results).Error; err != nil {
 		return nil, err
 	}
 
-	paginatedResults := &PaginatedResults[{{.ModelPkgName}}.{{.Model}}]{
+	paginatedResults := &PaginatedResults[*{{.ModelPkgName}}.{{.Model}}]{
 		Page:     page,
 		PageSize: pageSize,
 		HasNext:  int64(page*pageSize) < totalCount,
 		HasPrev:  page > 1,
-		Results: results,
-		Count: totalCount,
-		TotalPages:   int64(math.Ceil(float64(totalCount) / float64(pageSize))),
+		Results:  results,
+		Count:      totalCount,
+		TotalPages: int64(math.Ceil(float64(totalCount) / float64(pageSize))),
 	}
 
 	return paginatedResults, nil
 }
 
 
-func (repo *{{$ident}}Repo) FindOne(options ...*Options) ({{.ModelPkgName}}.{{.Model}}, error){
+
+func (repo *{{$ident}}Repo) FindOne(options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error){
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
 	db := repo.DB
 
@@ -843,12 +880,12 @@ func (repo *{{$ident}}Repo) FindOne(options ...*Options) ({{.ModelPkgName}}.{{.M
 
 	db = applyOptions(db, options...)
 	if err := db.First(&{{$ident}}).Error; err != nil {
-		return {{.ModelPkgName}}.{{.Model}}{}, err
+		return nil, err
 	}
-	return {{$ident}}, nil
+	return &{{$ident}}, nil
 }
 
-func (repo *{{$ident}}Repo) FindMany(options ...*Options) (results []{{.ModelPkgName}}.{{.Model}}, err error){
+func (repo *{{$ident}}Repo) FindMany(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error){
 	db := repo.DB
 	
 	if repo.preloadAll {
@@ -858,8 +895,22 @@ func (repo *{{$ident}}Repo) FindMany(options ...*Options) (results []{{.ModelPkg
 	}
 	
 	db = applyOptions(db, options...)
-	err = db.Find(&results).Error
+
+	var tmpResults []{{.ModelPkgName}}.{{.Model}}
+	err = db.Find(&tmpResults).Error
+
+	if err != nil{
+		return nil, err
+	}
+
+	results = make([]*{{.ModelPkgName}}.{{.Model}}, len(tmpResults))
+	for i := range tmpResults {
+		results[i] = &tmpResults[i]
+	}
+	
 	return
 }
 
 {{ end }}
+
+

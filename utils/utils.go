@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -164,10 +166,7 @@ func ParseMultipleUploads(c *fiber.Ctx, config Config, staticPrefix string) (map
 			}
 
 			// Determine the size of the chunk to read for packet sniffing
-			bufLen := int64(512)
-			if fileHeader.Size < bufLen {
-				bufLen = fileHeader.Size
-			}
+			bufLen := min(fileHeader.Size, int64(512))
 
 			// Create buffer to hold sniffed packets
 			header := make([]byte, bufLen)
@@ -205,12 +204,7 @@ func isValidExtension(fileHeader *multipart.FileHeader, invalidExtensions []stri
 
 // Check if string slice s contains e.
 func contains(s []string, e string) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, e)
 }
 
 /*
@@ -228,10 +222,8 @@ func isValidFileType(fileHeader *multipart.FileHeader, sniffedBytes []byte, vali
 		contentType = strings.TrimSpace(parts[0])
 	}
 
-	for _, t := range validTypes {
-		if t == contentType {
-			return contentType, true
-		}
+	if slices.Contains(validTypes, contentType) {
+		return contentType, true
 	}
 	return contentType, false
 }

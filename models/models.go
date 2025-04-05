@@ -21,7 +21,7 @@ type (
 	Role struct {
 		ID     int64  `json:"id"`
 		Name   string `json:"name"`
-		Gender Sex    `json:"gender"`
+		// Gender Sex    `json:"gender"`
 	}
 
 	Tag struct {
