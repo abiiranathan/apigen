@@ -13,7 +13,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/abiiranathan/apigen/config"
+	"github.com/abiiranathan/apigen/v2/config"
 	"github.com/iancoleman/strcase"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"

@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/abiiranathan/apigen/config"
-	"github.com/abiiranathan/apigen/enums"
-	"github.com/abiiranathan/apigen/parser"
-	"github.com/abiiranathan/apigen/typescript"
+	"github.com/abiiranathan/apigen/v2/config"
+	"github.com/abiiranathan/apigen/v2/enums"
+	"github.com/abiiranathan/apigen/v2/parser"
+	"github.com/abiiranathan/apigen/v2/typescript"
 	"github.com/abiiranathan/goflag"
 )
 

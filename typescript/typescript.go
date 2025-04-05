@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/abiiranathan/apigen/config"
-	"github.com/abiiranathan/apigen/parser"
+	"github.com/abiiranathan/apigen/v2/config"
+	"github.com/abiiranathan/apigen/v2/parser"
 )
 
 // regex pattern to extract the struct json tag.

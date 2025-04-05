@@ -18,7 +18,7 @@ func dedupePreloads(preloads []string) []string {
 		isUnique := true
 		for i, unique := range uniquePreloads {
 			if strings.HasPrefix(preload+".", unique+".") {
-				uniquePreloads = append(uniquePreloads[:i], uniquePreloads[i+1:]...)
+				uniquePreloads = slices.Delete(uniquePreloads, i, i+1)
 			} else if strings.HasPrefix(unique+".", preload+".") {
 				isUnique = false
 				break

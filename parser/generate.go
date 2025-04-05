@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/abiiranathan/apigen/config"
+	"github.com/abiiranathan/apigen/v2/config"
 )
 
 // Returns the go import path for a given directory targetDir

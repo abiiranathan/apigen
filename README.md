@@ -37,7 +37,7 @@ The configuration file has the following format:
 
 [Models]
 # package containing your models.
-Pkg='github.com/abiiranathan/apigen/models'
+Pkg='github.com/abiiranathan/apigen/v2/models'
 
 # List of models to skip when generating services and handlers
 Skip=['User', 'Payment']

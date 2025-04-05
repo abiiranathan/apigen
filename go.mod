@@ -1,10 +1,11 @@
-module github.com/abiiranathan/apigen
+module github.com/abiiranathan/apigen/v2
 
 go 1.22.0
 
 toolchain go1.24.0
 
 require (
+	github.com/abiiranathan/apigen v1.1.0
 	github.com/abiiranathan/goflag v0.1.6
 	github.com/iancoleman/strcase v0.3.0
 	github.com/pelletier/go-toml/v2 v2.2.3
@@ -26,13 +27,11 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/rogpeppe/go-internal v1.6.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect

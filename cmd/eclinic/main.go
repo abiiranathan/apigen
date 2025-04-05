@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/abiiranathan/apigen/models"
-	"github.com/abiiranathan/apigen/services"
+	"github.com/abiiranathan/apigen/v2/models"
+	"github.com/abiiranathan/apigen/v2/services"
 	"gorm.io/gorm/logger"
 )
 
