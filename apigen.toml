@@ -11,8 +11,8 @@ PreloadDepth = 3
 [Models]
 # ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [
-  'github.com/abiiranathan/apigen/v2/models',
-  'github.com/abiiranathan/apigen/v2/views',
+  'github.com/abiiranathan/apigen/models',
+  'github.com/abiiranathan/apigen/views',
 ]
 
 # Skip is a list of models to skip. Names are case sensitive
@@ -20,7 +20,7 @@ Skip = []
 
 # ReadOnly is a list of models that should not be generated with CRUD operations
 # Only Get methods will be generated for these models.
-ReadOnly = ['github.com/abiiranathan/apigen/v2/views']
+ReadOnly = ['github.com/abiiranathan/apigen/views']
 
 
 [Output]

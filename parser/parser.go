@@ -13,7 +13,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/abiiranathan/apigen/v2/config"
+	"github.com/abiiranathan/apigen/config"
 	"github.com/iancoleman/strcase"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -272,14 +272,14 @@ func Map(data []StructMeta) (m map[string]StructMeta) {
 }
 
 type tmplData struct {
-	PkgName      string   // Package name for the generated service.
-	ModelPkg     string   // Absolute name of package e.g "github.com/abiiranathan/todos/models"
-	ModelPkgs    []string // Absolute names of all package e.g ["github.com/abiiranathan/todos/models"]
-	ModelPkgName string   // Name of package e.g "models"
-	ModelObj   StructMeta // The model metadata object
-	Model      string     // The struct name e.g "User"
-	OmitFields []string   // ForeignKey fields to Omit during Update
-	Preloads   []string   // Stores fields to preload
+	PkgName      string     // Package name for the generated service.
+	ModelPkg     string     // Absolute name of package e.g "github.com/abiiranathan/todos/models"
+	ModelPkgs    []string   // Absolute names of all package e.g ["github.com/abiiranathan/todos/models"]
+	ModelPkgName string     // Name of package e.g "models"
+	ModelObj     StructMeta // The model metadata object
+	Model        string     // The struct name e.g "User"
+	OmitFields   []string   // ForeignKey fields to Omit during Update
+	Preloads     []string   // Stores fields to preload
 
 	DefaultAllocSize uint // Default size for slices
 

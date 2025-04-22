@@ -1,4 +1,4 @@
-module github.com/abiiranathan/apigen/v2
+module github.com/abiiranathan/apigen
 
 go 1.22.0
 

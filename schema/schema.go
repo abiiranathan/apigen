@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"io"
 	"reflect"
@@ -8,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/abiiranathan/apigen/enums"
 	"github.com/iancoleman/strcase"
 )
 
@@ -105,6 +106,22 @@ func mergeTableMaps(m1 TableMap, m2 TableMap) TableMap {
 	return merged
 }
 
+// Enumer interface embeds sql.Scanner interface, database/driver.Valuer.
+// Has 2 methods ValidValues()[]string to return valid enums and DatabaseType()
+// that returns the sql data type.
+type Enumer interface {
+	sql.Scanner
+	driver.Valuer
+	ValidValues() []string
+	DatabaseType() string
+}
+
+func ImplementsEnumer(field reflect.StructField) bool {
+	fieldPtr := reflect.New(field.Type)
+	interfaceType := reflect.TypeOf((*Enumer)(nil)).Elem()
+	return fieldPtr.Type().AssignableTo(interfaceType)
+}
+
 func generateSQL(model interface{}) (schemas []string, tableMap TableMap) {
 	var fields []string
 	var exactFieldNames []Field
@@ -180,9 +197,9 @@ func generateSQL(model interface{}) (schemas []string, tableMap TableMap) {
 		// Custom types
 		if dataType == "" {
 			// Check if column implements the enumer interfaces
-			if enums.ImplementsEnumer(field) {
+			if ImplementsEnumer(field) {
 				structValue := reflect.New(field.Type).Elem()
-				enumer := structValue.Addr().Interface().(enums.Enumer)
+				enumer := structValue.Addr().Interface().(Enumer)
 				dataType = enumer.DatabaseType()
 				enumsMap[fieldName] = enumer.ValidValues()
 				initFieldDef()

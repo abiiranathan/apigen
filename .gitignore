@@ -4,7 +4,7 @@
 *.sqlite3
 services
 handlers
-cmd/apigen/v2/apigen.toml
+cmdapigen/apigen.toml
 apigen
 api.http
 enums.sql

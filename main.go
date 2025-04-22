@@ -5,20 +5,16 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
-	"github.com/abiiranathan/apigen/v2/config"
-	"github.com/abiiranathan/apigen/v2/enums"
-	"github.com/abiiranathan/apigen/v2/parser"
-	"github.com/abiiranathan/apigen/v2/typescript"
+	"github.com/abiiranathan/apigen/config"
+	"github.com/abiiranathan/apigen/parser"
+	"github.com/abiiranathan/apigen/typescript"
 	"github.com/abiiranathan/goflag"
 )
 
 var (
-	configName    = "apigen.toml"
-	generateEnums = false
-	pgtypesPath   = "enums.sql"
-	tsTypesPath   = ""
+	configName  = "apigen.toml"
+	tsTypesPath = ""
 )
 
 //go:embed apigen.toml
@@ -31,9 +27,6 @@ func defineFlags(ctx *goflag.Context) {
 	// Subcommands
 	ctx.AddSubCommand("init", "Initialize project and generate apigen.toml", initConfigFile)
 	gen := ctx.AddSubCommand("generate", "Generate code", generateCode)
-
-	gen.AddFlag(goflag.FlagBool, "enums", "e", &generateEnums, "Generate enums code present in the package.", false)
-	gen.AddFlag(goflag.FlagString, "pgtypes", "d", &pgtypesPath, "File path to write the sql for the postgres enums. If empty, no sql is written", false)
 	gen.AddFlag(goflag.FlagString, "typescript", "t", &tsTypesPath, "File path to write the typescript types. If empty, no typescript is written", false)
 }
 
@@ -64,30 +57,6 @@ func generateCode() {
 	cfg, err := config.LoadConfig(configName)
 	if err != nil {
 		log.Fatalln(err)
-	}
-
-	// Validate flags
-	if generateEnums && pgtypesPath == "" {
-		log.Fatalln("pgtypes flag is required to generate enums")
-	}
-
-	// Generate code for enumerated constants
-	if generateEnums {
-		// Generate sql for postgres enums
-		sql, err := enums.GenerateEnums(cfg.Models.Pkgs)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		// Create intermediate dirs if not exists
-		dirname := filepath.Dir(pgtypesPath)
-		if err := os.MkdirAll(dirname, 0755); err != nil {
-			log.Fatalf("error creating directory: %s: %v\n", dirname, err)
-		}
-		err = os.WriteFile(pgtypesPath, []byte(sql), 06400)
-		if err != nil {
-			log.Fatalln(err)
-		}
 	}
 
 	// If tsTypesPath is not empty generate the types
