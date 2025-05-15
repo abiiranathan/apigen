@@ -11,7 +11,9 @@ import (
 // Config struct represents the configuration parameters
 type Config struct {
 	PreloadAll bool `toml:"PreloadAll"` // Preload all the relations
-	Models     struct {
+	OutputJson bool `toml:"OutputJson"` // Output JSON file with all the relations
+
+	Models struct {
 		Pkgs     []string `toml:"Pkgs"`     // absolute package names where models are located
 		Skip     []string `toml:"Skip"`     // Slice of models(Structs) to skip
 		ReadOnly []string `toml:"ReadOnly"` // For SQL Views
@@ -35,17 +37,16 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	cfg := Config{}
-	err = toml.Unmarshal(b, &cfg)
-
-	if err != nil {
+	cfg := new(Config)
+	if err = toml.Unmarshal(b, cfg); err != nil {
 		return nil, err
 	}
 
-	if err := validateConfig(&cfg); err != nil {
+	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
-	return &cfg, err
+
+	return cfg, err
 }
 
 func validateConfig(cfg *Config) error {

@@ -25,7 +25,11 @@ var serviceTemplate []byte
 
 var enCaser = cases.Title(language.English)
 
-const skipTag = "apigen:skip"
+const (
+	skipTag         = "apigen:skip"
+	foreignKeyIdent = "foreignKey"
+	many2manyIdent  = "many2many"
+)
 
 // Field contains meta-data for each struct field.
 type Field struct {
@@ -109,6 +113,9 @@ func Parse(modelPkgs []string) []StructMeta {
 						meta := StructMeta{
 							Name:    t.Name.Name,
 							Package: pkg.String(),
+							Fields:  make([]Field, 0, len(stype.Fields.List)),
+							PKType:  "",
+							Skip:    false,
 						}
 
 						// Check if struct should be skipped by reading for doc comments
@@ -117,6 +124,7 @@ func Parse(modelPkgs []string) []StructMeta {
 								if strings.Contains(comment.Text, skipTag) {
 									meta.Skip = true
 									log.Println("Skipping struct:", meta.Name)
+									break
 								}
 							}
 						}
@@ -129,8 +137,8 @@ func Parse(modelPkgs []string) []StructMeta {
 
 							// Check if it's a foreignKey or many to many based on tag
 							// foreignKey or many2many (GORM)
-							isFK := strings.Contains(tagValue, "foreignKey")
-							isManyToMany := strings.Contains(tagValue, "many2many")
+							isFK := strings.Contains(tagValue, foreignKeyIdent)
+							isManyToMany := strings.Contains(tagValue, many2manyIdent)
 							Preload := isFK || isManyToMany
 
 							switch typ := field.Type.(type) {
@@ -169,14 +177,15 @@ func Parse(modelPkgs []string) []StructMeta {
 								}
 							case *ast.ArrayType:
 								fieldType := formatArrayType(typ)
-
 								arrLen := getArrayLen(typ)
 								var arrType string
+
 								if arrLen == 0 {
 									arrType = "[]" + fieldType
 								} else {
 									arrType = "[" + strconv.Itoa(arrLen) + "]" + fieldType
 								}
+
 								if _, ok := field.Type.(*ast.StarExpr); ok {
 									arrType = "*" + arrType
 								}
@@ -299,7 +308,8 @@ func packageReadOnly(cfg *config.Config, pkg string) bool {
 //
 // If models in skipServices are ignored.
 func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, error) {
-	preloads := GetPreloadMap(structs, cfg.PreloadDepth)
+	preloads := GetPreloadMap(structs, cfg)
+
 	buf := new(bytes.Buffer)
 	modelNames := make([]string, 0, len(structs))
 
@@ -374,7 +384,6 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 		return nil, err
 	}
 
-	// fmt.Println(buf.String())
 	// Format source
 	b, err := format.Source(buf.Bytes())
 	if err != nil {

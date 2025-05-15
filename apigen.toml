@@ -8,6 +8,9 @@ PreloadAll = false
 # e.g Patient.Visit.Doctor will be preloaded if PreloadDepth is 3
 PreloadDepth = 3
 
+# Output preload.json
+OutputJson = true
+
 [Models]
 # ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [
