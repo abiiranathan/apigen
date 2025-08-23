@@ -8,3 +8,4 @@ cmdapigen/apigen.toml
 apigen
 api.http
 enums.sql
+preload.json

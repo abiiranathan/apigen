@@ -37,9 +37,8 @@ func generateInterfaces(
 	if !recursive {
 		// Create custom override types
 		for key, value := range overrides.Types {
-			output.Write([]byte(fmt.Sprintf("type %s = %s\n\n", key, value)))
+			fmt.Fprintf(output, "type %s = %s\n\n", key, value)
 		}
-
 	}
 
 	for _, input := range inputs {
@@ -119,7 +118,7 @@ func generateInterfaces(
 			builder.WriteString("\n")
 		}
 		builder.WriteString("}\n\n")
-		output.Write([]byte(builder.String()))
+		_, _ = output.Write([]byte(builder.String()))
 	}
 }
 

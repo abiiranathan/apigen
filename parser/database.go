@@ -4,6 +4,7 @@ var dbText = `package %s
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -14,7 +15,11 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel) (*gorm.DB, error) {
+func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, logOut io.Writer) (*gorm.DB, error) {
+	if logOut == nil{
+		logOut = os.Stdout
+	}
+
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		NowFunc: func() time.Time {
 			loc, err := time.LoadLocation(timezone)
@@ -25,7 +30,7 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel) (
 		},
 		PrepareStmt:                      true,
 		IgnoreRelationshipsWhenMigrating: false,
-		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags),
+		Logger: logger.New(log.New(logOut, "\r\n", log.LstdFlags),
 			logger.Config{
 				LogLevel: logLevel,
 			}),
