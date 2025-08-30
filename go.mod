@@ -1,15 +1,13 @@
 module github.com/abiiranathan/apigen
 
-go 1.22.0
-
-toolchain go1.24.0
+go 1.25.0
 
 require (
 	github.com/abiiranathan/goflag v0.1.6
 	github.com/iancoleman/strcase v0.3.0
-	github.com/pelletier/go-toml/v2 v2.2.3
-	golang.org/x/text v0.22.0
-	golang.org/x/tools v0.30.0
+	github.com/pelletier/go-toml/v2 v2.2.4
+	golang.org/x/text v0.28.0
+	golang.org/x/tools v0.36.0
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
 )
@@ -23,7 +21,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sync v0.16.0 // indirect
 )
 
-require golang.org/x/mod v0.23.0 // indirect
+require golang.org/x/mod v0.27.0 // indirect

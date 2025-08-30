@@ -92,9 +92,8 @@ func ParseDSN(dsn string, config *DatabaseConfig) {
 	}
 
 	configMap := map[string]string{}
-	for _, s := range strings.Split(dsn, " ") {
+	for s := range strings.SplitSeq(dsn, " ") {
 		v := strings.Split(s, "=")
-
 		if len(v) == 2 {
 			configMap[v[0]] = v[1]
 		}
@@ -118,5 +117,4 @@ func ParseDSN(dsn string, config *DatabaseConfig) {
 		config.SSLMode = "disabled"
 	}
 }
-
 `
