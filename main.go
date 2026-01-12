@@ -20,27 +20,24 @@ var (
 //go:embed apigen.toml
 var defaultConfig []byte
 
-func defineFlags(ctx *goflag.Context) {
-	// Global flags
-	ctx.AddFlag(goflag.FlagFilePath, "config", "c", &configName, "Path to config filename.", false)
-
-	// Subcommands
-	ctx.AddSubCommand("init", "Initialize project and generate apigen.toml", initConfigFile)
-	gen := ctx.AddSubCommand("generate", "Generate code", generateCode)
-	gen.AddFlag(goflag.FlagString, "typescript", "t", &tsTypesPath, "File path to write the typescript types. If empty, no typescript is written", false)
+func defineFlags(cli *goflag.CLI) {
+	cli.FilePath("config", "c", &configName, "Path to config filename")
+	cli.SubCommand("init", "Initialize project and generate apigen.toml", initConfigFile)
+	cli.SubCommand("generate", "Generate code", generateCode).
+		String("typescript", "t", &tsTypesPath, "File path to write the typescript types")
 }
 
 func main() {
-	ctx := goflag.NewContext()
-	defineFlags(ctx)
+	cli := goflag.New()
+	defineFlags(cli)
 
 	if len(os.Args) < 2 {
-		ctx.PrintUsage(os.Stderr)
+		cli.PrintUsage(os.Stderr)
 		os.Exit(1)
 	}
 
 	// Parse flags
-	subcmd, err := ctx.Parse(os.Args)
+	subcmd, err := cli.Parse(os.Args)
 	if err != nil {
 		log.Fatalln(err)
 	}
