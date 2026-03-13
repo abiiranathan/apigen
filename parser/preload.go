@@ -76,7 +76,7 @@ func GetPreloadMap(structs []StructMeta, cfg *config.Config) map[string][]string
 		preloads[key] = dedupePreloads(fields)
 	}
 
-	if cfg.OutputJson {
+	if cfg.OutputJSON {
 		outpath := "preload.json"
 		if err := writeJSONToFile(outpath, preloads); err != nil {
 			fmt.Printf("Error writing to JSON file: %v\n", err)

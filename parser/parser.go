@@ -1,3 +1,5 @@
+// Package parser provides functionality to parse Go source files,
+// extract struct metadata, and generate GORM services based on that metadata.
 package parser
 
 import (
@@ -271,7 +273,7 @@ func Parse(modelPkgs []string) []StructMeta {
 	return structSlice
 }
 
-// Create a StructMeta map from slice.
+// Map takes a slice of StructMeta and returns a map with struct names as keys and StructMeta as values.
 func Map(data []StructMeta) (m map[string]StructMeta) {
 	m = make(map[string]StructMeta)
 	for _, row := range data {
@@ -293,6 +295,7 @@ type tmplData struct {
 	DefaultAllocSize uint // Default size for slices
 
 	PreloadAll        bool // Preload all the relations
+	RefetchAfterWrite bool // Re-fetch record after Create/Update to populate associations
 	PkgReadOnly       bool // For SQL Views
 	WritePKGDecl      bool
 	SkipService       bool // Whether to skip creating this service
@@ -303,7 +306,7 @@ func packageReadOnly(cfg *config.Config, pkg string) bool {
 	return slices.Contains(cfg.Models.ReadOnly, pkg)
 }
 
-// Generate services for models in pkg.
+// generateGORMServices generates GORM services for models in the given package.
 // structs represents the data structures for creating the services.
 //
 // If models in skipServices are ignored.
@@ -338,19 +341,26 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 
 		}
 
+		// When LazyPreload is enabled, override PreloadAll to false
+		preloadAll := cfg.PreloadAll
+		if cfg.LazyPreload {
+			preloadAll = false
+		}
+
 		data := tmplData{
-			PreloadAll:   cfg.PreloadAll,
-			PkgName:      cfg.Output.ServiceName,
-			ModelPkg:     st.Package,
-			ModelPkgs:    cfg.Models.Pkgs,
-			ModelPkgName: modelPkgName,
-			PkgReadOnly:  packageReadOnly(cfg, st.Package),
-			ModelObj:     st,
-			Model:        st.Name,
-			WritePKGDecl: index == 0,
-			Preloads:     preloadFields,
-			OmitFields:   omitFields,
-			SkipService:  slices.Contains(cfg.Models.Skip, st.Name),
+			PreloadAll:        preloadAll,
+			RefetchAfterWrite: cfg.ShouldRefetchAfterWrite(),
+			PkgName:           cfg.Output.ServiceName,
+			ModelPkg:          st.Package,
+			ModelPkgs:         cfg.Models.Pkgs,
+			ModelPkgName:      modelPkgName,
+			PkgReadOnly:       packageReadOnly(cfg, st.Package),
+			ModelObj:          st,
+			Model:             st.Name,
+			WritePKGDecl:      index == 0,
+			Preloads:          preloadFields,
+			OmitFields:        omitFields,
+			SkipService:       slices.Contains(cfg.Models.Skip, st.Name),
 		}
 		err := parseTemplate(buf, data)
 		if err != nil {

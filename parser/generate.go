@@ -9,7 +9,7 @@ import (
 	"github.com/abiiranathan/apigen/config"
 )
 
-// Returns the go import path for a given directory targetDir
+// GetModulePath retrieves the module path for the given target directory using the Go build context.
 func GetModulePath(targetDir string) (string, error) {
 	// Retrieve the build context
 	ctx := build.Default
@@ -19,11 +19,11 @@ func GetModulePath(targetDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Return the import  path
+	// Return the import path
 	return pkg.ImportPath, nil
 }
 
-// generateServices generates the service.go file
+// GenerateGORMServices generates the service.go file
 func GenerateGORMServices(cfg *config.Config, structMetaData []StructMeta) (err error) {
 	b, err := generateGORMServices(structMetaData, cfg)
 	if err != nil {

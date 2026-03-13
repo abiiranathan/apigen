@@ -1,3 +1,4 @@
+// Package config provides functionality to load and validate the configuration for the apigen tool.
 package config
 
 import (
@@ -11,7 +12,16 @@ import (
 // Config struct represents the configuration parameters
 type Config struct {
 	PreloadAll bool `toml:"PreloadAll"` // Preload all the relations
-	OutputJson bool `toml:"OutputJson"` // Output JSON file with all the relations
+	OutputJSON bool `toml:"OutputJson"` // Output JSON file with all the relations
+
+	// LazyPreload when true, sets preloadAll=false by default in generated services.
+	// Preloads are only applied when the caller explicitly opts in via .PreloadAll(true) or Preload() option.
+	// Defaults to false for backward compatibility.
+	LazyPreload bool `toml:"LazyPreload"`
+
+	// RefetchAfterWrite when true (default), re-fetches the record after Create/Update to populate associations.
+	// Set to false to skip refetch — callers can call .Get(id) explicitly when they need associations.
+	RefetchAfterWrite *bool `toml:"RefetchAfterWrite"`
 
 	Models struct {
 		Pkgs     []string `toml:"Pkgs"`     // absolute package names where models are located
@@ -24,6 +34,15 @@ type Config struct {
 	} `toml:"Output"`
 	Overrides    Overrides `toml:"overrides"`
 	PreloadDepth uint      `toml:"PreloadDepth"` // Preload depth for nested relations
+}
+
+// ShouldRefetchAfterWrite returns whether to refetch after write operations.
+// Defaults to true when not explicitly set (backward compatible).
+func (c *Config) ShouldRefetchAfterWrite() bool {
+	if c.RefetchAfterWrite == nil {
+		return true
+	}
+	return *c.RefetchAfterWrite
 }
 
 type Overrides struct {

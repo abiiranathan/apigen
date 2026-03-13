@@ -11,6 +11,15 @@ PreloadDepth = 3
 # Output preload.json
 OutputJson = true
 
+# LazyPreload when true, sets preloadAll=false by default in generated services.
+# Preloads are only applied when the caller explicitly opts in via .PreloadAll(true) or Preload() option.
+# Defaults to false for backward compatibility.
+# LazyPreload = false
+
+# RefetchAfterWrite when true (default), re-fetches the record after Create/Update to populate associations.
+# Set to false to skip the refetch — callers can call .Get(id) explicitly when they need associations loaded.
+# RefetchAfterWrite = true
+
 [Models]
 # ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [

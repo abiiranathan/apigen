@@ -1,3 +1,4 @@
+// Package models defines the data models used in the application, including User, Role, Tag, Issue, Question, and Comment.
 package models
 
 type Sex string
@@ -19,8 +20,8 @@ type (
 	}
 
 	Role struct {
-		ID     int64  `json:"id"`
-		Name   string `json:"name"`
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
 		// Gender Sex    `json:"gender"`
 	}
 
@@ -38,13 +39,14 @@ type (
 		Name string `json:"name"`
 	}
 
+	// Question represents a question that can have many comments, and comments can have many nested comments (replies).
 	// apigen:skip
 	Question struct {
 		ID       int       `json:"id"`
 		Comments []Comment `json:"comments" gorm:"many2many:question_comments"`
 	}
 
-	// Test recursion
+	// Comment represents a comment that can have many nested comments (replies).
 	Comment struct {
 		ID         int       `json:"id"`
 		QuestionID int       `json:"question_id"`

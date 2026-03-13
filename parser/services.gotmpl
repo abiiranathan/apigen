@@ -507,6 +507,30 @@ type PaginatedResults[T any] struct {
     Results  []T  `json:"results"`
 }
 
+// RawQuery executes a raw SQL query and scans the results into a slice of T.
+// Use this for performance-critical queries, reports, aggregates, or CTEs
+// where the GORM query builder adds unnecessary overhead.
+//
+//	var results []MyStruct
+//	results, err := services.RawQuery[MyStruct](db, "SELECT * FROM users WHERE age > ?", 18)
+func RawQuery[T any](db *gorm.DB, sql string, args ...any) ([]T, error) {
+    var results []T
+    if err := db.Raw(sql, args...).Scan(&results).Error; err != nil {
+        return nil, err
+    }
+    return results, nil
+}
+
+// RawQueryRow executes a raw SQL query and scans a single result into T.
+// Returns gorm.ErrRecordNotFound if no rows match.
+func RawQueryRow[T any](db *gorm.DB, sql string, args ...any) (*T, error) {
+    var result T
+    if err := db.Raw(sql, args...).Scan(&result).Error; err != nil {
+        return nil, err
+    }
+    return &result, nil
+}
+
 {{ end }}
 
 {{ $ident:=.Model | ToLower }}
@@ -627,15 +651,37 @@ func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model
 		return err
 	}
 
-	// Refetch to load associations if any
-	for i, record := range *{{$ident}}s{
-		tmpRecord, err := repo.Get(record.ID, options...)
-		if err != nil {
-			return  err
+	{{ if .RefetchAfterWrite }}
+	// Batch refetch to load associations (single query instead of N+1)
+	if repo.preloadAll && len(repo.preloads) > 0 {
+		ids := make([]{{$pkType}}, len(*{{$ident}}s))
+		for i, record := range *{{$ident}}s {
+			ids[i] = record.ID
 		}
-		record = *tmpRecord
-		(*{{$ident}}s)[i]=record
+
+		db := repo.DB
+		for _, preload := range repo.preloads {
+			db = db.Preload(preload)
+		}
+		db = applyOptions(db, options...)
+
+		var fetched []{{.ModelPkgName}}.{{.Model}}
+		if err := db.Where("id IN ?", ids).Find(&fetched).Error; err != nil {
+			return err
+		}
+
+		// Map results back by ID
+		fetchMap := make(map[{{$pkType}}]{{.ModelPkgName}}.{{.Model}}, len(fetched))
+		for _, f := range fetched {
+			fetchMap[f.ID] = f
+		}
+		for i, record := range *{{$ident}}s {
+			if f, ok := fetchMap[record.ID]; ok {
+				(*{{$ident}}s)[i] = f
+			}
+		}
 	}
+	{{ end }}
 	return nil
 }
 
@@ -645,13 +691,16 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 		return err
 	}
 
+	{{ if .RefetchAfterWrite }}
 	// Refetch to load associations if any
-	tmpRecord, err := repo.Get({{$ident}}.ID, options...)
-	if err != nil {
-		return  err
+	if repo.preloadAll && len(repo.preloads) > 0 {
+		tmpRecord, err := repo.Get({{$ident}}.ID, options...)
+		if err != nil {
+			return err
+		}
+		*{{$ident}}=*tmpRecord
 	}
-
-	*{{$ident}}=*tmpRecord
+	{{ end }}
 
 	return nil
 }
@@ -665,8 +714,12 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 			return nil, err
 		}
 
-		tmp, err := repo.Get(id, options...)
-		return tmp, err
+		{{ if .RefetchAfterWrite }}
+		if repo.preloadAll && len(repo.preloads) > 0 {
+			return repo.Get(id, options...)
+		}
+		{{ end }}
+		return {{$ident}}, nil
 	}
 {{ end }}
 
@@ -682,16 +735,15 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 			return nil, err
 		}
 
-		var updated{{$ident}} = new({{.ModelPkgName}}.{{.Model}})
-		db := repo.DB
-
-		if repo.preloadAll {
-			for _, preload := range repo.preloads {
-				db = db.Preload(preload)
-			}
+		{{ if .RefetchAfterWrite }}
+		if repo.preloadAll && len(repo.preloads) > 0 {
+			return repo.Get(id, options...)
 		}
+		{{ end }}
 
-		db = applyOptions(db, options...)
+		// Fetch the updated record without preloads
+		var updated{{$ident}} = new({{.ModelPkgName}}.{{.Model}})
+		db := applyOptions(repo.DB, options...)
 		if err := db.First(updated{{$ident}}, id).Error; err != nil {
 			return nil, err
 		}
@@ -704,16 +756,15 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 			return nil, err
 		}
 
-		var updated{{$ident}} = new({{.ModelPkgName}}.{{.Model}})
-		db := repo.DB
-
-		if repo.preloadAll {
-			for _, preload := range repo.preloads {
-				db = db.Preload(preload)
-			}
+		{{ if .RefetchAfterWrite }}
+		if repo.preloadAll && len(repo.preloads) > 0 {
+			return repo.Get(id, options...)
 		}
+		{{ end }}
 
-		db = applyOptions(db, options...)
+		// Fetch the updated record without preloads
+		var updated{{$ident}} = new({{.ModelPkgName}}.{{.Model}})
+		db := applyOptions(repo.DB, options...)
 		if err := db.First(updated{{$ident}}, id).Error; err != nil {
 			return nil, err
 		}
