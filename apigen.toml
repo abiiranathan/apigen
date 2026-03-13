@@ -20,6 +20,22 @@ OutputJson = true
 # Set to false to skip the refetch — callers can call .Get(id) explicitly when they need associations loaded.
 # RefetchAfterWrite = true
 
+# Queries lets you override preload/refetch defaults for specific generated methods.
+# Precedence is:
+# 1. Top-level PreloadAll / LazyPreload / RefetchAfterWrite
+# 2. [Queries.Default.<Method>]
+# 3. [Queries.Models.<Model>.<Method>]
+#
+# Example:
+# [Queries.Default.GetAll]
+# PreloadAll = false
+#
+# [Queries.Models.User.Get]
+# PreloadAll = true
+#
+# [Queries.Models.User.Create]
+# RefetchAfterWrite = false
+
 [Models]
 # ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [

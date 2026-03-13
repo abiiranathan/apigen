@@ -34,6 +34,35 @@ type Config struct {
 	} `toml:"Output"`
 	Overrides    Overrides `toml:"overrides"`
 	PreloadDepth uint      `toml:"PreloadDepth"` // Preload depth for nested relations
+	Queries      Queries   `toml:"Queries"`
+}
+
+type QuerySettings struct {
+	PreloadAll        *bool `toml:"PreloadAll"`
+	RefetchAfterWrite *bool `toml:"RefetchAfterWrite"`
+}
+
+type QuerySet struct {
+	Get                  QuerySettings `toml:"Get"`
+	GetAll               QuerySettings `toml:"GetAll"`
+	GetPaginated         QuerySettings `toml:"GetPaginated"`
+	FindOne              QuerySettings `toml:"FindOne"`
+	FindMany             QuerySettings `toml:"FindMany"`
+	Create               QuerySettings `toml:"Create"`
+	CreateMany           QuerySettings `toml:"CreateMany"`
+	Update               QuerySettings `toml:"Update"`
+	PartialUpdate        QuerySettings `toml:"PartialUpdate"`
+	PartialUpdateWithMap QuerySettings `toml:"PartialUpdateWithMap"`
+}
+
+type Queries struct {
+	Default QuerySet            `toml:"Default"`
+	Models  map[string]QuerySet `toml:"Models"`
+}
+
+type EffectiveQuerySettings struct {
+	PreloadAll        bool
+	RefetchAfterWrite bool
 }
 
 // ShouldRefetchAfterWrite returns whether to refetch after write operations.
@@ -43,6 +72,64 @@ func (c *Config) ShouldRefetchAfterWrite() bool {
 		return true
 	}
 	return *c.RefetchAfterWrite
+}
+
+func (c *Config) DefaultPreloadAll() bool {
+	if c.LazyPreload {
+		return false
+	}
+	return c.PreloadAll
+}
+
+func (c *Config) QueryConfig(model, operation string) EffectiveQuerySettings {
+	effective := EffectiveQuerySettings{
+		PreloadAll:        c.DefaultPreloadAll(),
+		RefetchAfterWrite: c.ShouldRefetchAfterWrite(),
+	}
+
+	effective = applyQuerySettings(effective, c.Queries.Default.lookup(operation))
+	if modelSettings, ok := c.Queries.Models[model]; ok {
+		effective = applyQuerySettings(effective, modelSettings.lookup(operation))
+	}
+
+	return effective
+}
+
+func applyQuerySettings(base EffectiveQuerySettings, override QuerySettings) EffectiveQuerySettings {
+	if override.PreloadAll != nil {
+		base.PreloadAll = *override.PreloadAll
+	}
+	if override.RefetchAfterWrite != nil {
+		base.RefetchAfterWrite = *override.RefetchAfterWrite
+	}
+	return base
+}
+
+func (q QuerySet) lookup(operation string) QuerySettings {
+	switch operation {
+	case "Get":
+		return q.Get
+	case "GetAll":
+		return q.GetAll
+	case "GetPaginated":
+		return q.GetPaginated
+	case "FindOne":
+		return q.FindOne
+	case "FindMany":
+		return q.FindMany
+	case "Create":
+		return q.Create
+	case "CreateMany":
+		return q.CreateMany
+	case "Update":
+		return q.Update
+	case "PartialUpdate":
+		return q.PartialUpdate
+	case "PartialUpdateWithMap":
+		return q.PartialUpdateWithMap
+	default:
+		return QuerySettings{}
+	}
 }
 
 type Overrides struct {

@@ -294,12 +294,29 @@ type tmplData struct {
 
 	DefaultAllocSize uint // Default size for slices
 
-	PreloadAll        bool // Preload all the relations
-	RefetchAfterWrite bool // Re-fetch record after Create/Update to populate associations
+	Queries           queryTemplateData
 	PkgReadOnly       bool // For SQL Views
 	WritePKGDecl      bool
 	SkipService       bool // Whether to skip creating this service
 	PreallocateSlices bool // Preallocate slices
+}
+
+type queryMethodTemplateData struct {
+	PreloadAll        bool
+	RefetchAfterWrite bool
+}
+
+type queryTemplateData struct {
+	Get                  queryMethodTemplateData
+	GetAll               queryMethodTemplateData
+	GetPaginated         queryMethodTemplateData
+	FindOne              queryMethodTemplateData
+	FindMany             queryMethodTemplateData
+	Create               queryMethodTemplateData
+	CreateMany           queryMethodTemplateData
+	Update               queryMethodTemplateData
+	PartialUpdate        queryMethodTemplateData
+	PartialUpdateWithMap queryMethodTemplateData
 }
 
 func packageReadOnly(cfg *config.Config, pkg string) bool {
@@ -341,26 +358,19 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 
 		}
 
-		// When LazyPreload is enabled, override PreloadAll to false
-		preloadAll := cfg.PreloadAll
-		if cfg.LazyPreload {
-			preloadAll = false
-		}
-
 		data := tmplData{
-			PreloadAll:        preloadAll,
-			RefetchAfterWrite: cfg.ShouldRefetchAfterWrite(),
-			PkgName:           cfg.Output.ServiceName,
-			ModelPkg:          st.Package,
-			ModelPkgs:         cfg.Models.Pkgs,
-			ModelPkgName:      modelPkgName,
-			PkgReadOnly:       packageReadOnly(cfg, st.Package),
-			ModelObj:          st,
-			Model:             st.Name,
-			WritePKGDecl:      index == 0,
-			Preloads:          preloadFields,
-			OmitFields:        omitFields,
-			SkipService:       slices.Contains(cfg.Models.Skip, st.Name),
+			PkgName:      cfg.Output.ServiceName,
+			ModelPkg:     st.Package,
+			ModelPkgs:    cfg.Models.Pkgs,
+			ModelPkgName: modelPkgName,
+			Queries:      newQueryTemplateData(cfg, st.Name),
+			PkgReadOnly:  packageReadOnly(cfg, st.Package),
+			ModelObj:     st,
+			Model:        st.Name,
+			WritePKGDecl: index == 0,
+			Preloads:     preloadFields,
+			OmitFields:   omitFields,
+			SkipService:  slices.Contains(cfg.Models.Skip, st.Name),
 		}
 		err := parseTemplate(buf, data)
 		if err != nil {
@@ -400,6 +410,28 @@ func generateGORMServices(structs []StructMeta, cfg *config.Config) ([]byte, err
 		return nil, fmt.Errorf("error format source file: %w, source: %s", err, b)
 	}
 	return b, nil
+}
+
+func newQueryTemplateData(cfg *config.Config, model string) queryTemplateData {
+	return queryTemplateData{
+		Get:                  newQueryMethodTemplateData(cfg.QueryConfig(model, "Get")),
+		GetAll:               newQueryMethodTemplateData(cfg.QueryConfig(model, "GetAll")),
+		GetPaginated:         newQueryMethodTemplateData(cfg.QueryConfig(model, "GetPaginated")),
+		FindOne:              newQueryMethodTemplateData(cfg.QueryConfig(model, "FindOne")),
+		FindMany:             newQueryMethodTemplateData(cfg.QueryConfig(model, "FindMany")),
+		Create:               newQueryMethodTemplateData(cfg.QueryConfig(model, "Create")),
+		CreateMany:           newQueryMethodTemplateData(cfg.QueryConfig(model, "CreateMany")),
+		Update:               newQueryMethodTemplateData(cfg.QueryConfig(model, "Update")),
+		PartialUpdate:        newQueryMethodTemplateData(cfg.QueryConfig(model, "PartialUpdate")),
+		PartialUpdateWithMap: newQueryMethodTemplateData(cfg.QueryConfig(model, "PartialUpdateWithMap")),
+	}
+}
+
+func newQueryMethodTemplateData(settings config.EffectiveQuerySettings) queryMethodTemplateData {
+	return queryMethodTemplateData{
+		PreloadAll:        settings.PreloadAll,
+		RefetchAfterWrite: settings.RefetchAfterWrite,
+	}
 }
 
 // Passes data to the string template that is executed into w.

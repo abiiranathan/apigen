@@ -25,6 +25,52 @@ LazyPreload = false
 RefetchAfterWrite = true
 ```
 
+You can also override those defaults per generated method. Supported method keys are:
+
+- `Get`
+- `GetAll`
+- `GetPaginated`
+- `FindOne`
+- `FindMany`
+- `Create`
+- `CreateMany`
+- `Update`
+- `PartialUpdate`
+- `PartialUpdateWithMap`
+
+Each method override can set:
+
+- `PreloadAll`
+- `RefetchAfterWrite`
+
+Example:
+
+```toml
+[Queries.Default.GetAll]
+PreloadAll = false
+
+[Queries.Default.FindMany]
+PreloadAll = false
+
+[Queries.Models.User.Get]
+PreloadAll = true
+
+[Queries.Models.User.Create]
+RefetchAfterWrite = false
+
+[Queries.Models.User.Update]
+PreloadAll = true
+RefetchAfterWrite = true
+```
+
+Override precedence is top-level config, then `Queries.Default`, then `Queries.Models.<Model>`.
+
+At runtime, generated services still allow per-call overrides:
+
+- `.PreloadAll(true)` or `.PreloadAll(false)` overrides the configured preload default for that service instance.
+- `.Preload("Relation")` disables the configured automatic preloads for that call and applies only the explicit preload(s) you pass.
+- Write methods only re-fetch when the effective `RefetchAfterWrite` is `true`.
+
 The generated services also include generic raw SQL helpers for escape-hatch queries:
 
 ```go
@@ -75,6 +121,30 @@ PreloadDepth = 3
 # Output preload.json
 OutputJson = true
 
+# LazyPreload overrides top-level PreloadAll and makes the default no-preload.
+# Query-specific overrides can still enable preloading for selected methods.
+# LazyPreload = false
+
+# RefetchAfterWrite defaults to true when omitted.
+# Query-specific overrides can disable it for selected methods.
+# RefetchAfterWrite = true
+
+[Queries.Default.GetAll]
+PreloadAll = false
+
+[Queries.Default.FindMany]
+PreloadAll = false
+
+[Queries.Models.User.Get]
+PreloadAll = true
+
+[Queries.Models.User.Create]
+RefetchAfterWrite = false
+
+[Queries.Models.User.Update]
+PreloadAll = true
+RefetchAfterWrite = true
+
 [Models]
 # ModelPkg is the package name for the models to look for struct definitions
 Pkgs = [
@@ -123,6 +193,8 @@ apigen --config config.toml generate
 
 to specify the custom path to the configuration file.
 
+If you change `Queries` settings, regenerate services so the new defaults are baked into the generated code.
+
 ### Using the generated code
 
 ```go
@@ -148,6 +220,10 @@ func main() {
 
 	svc := services.NewService(db)
     users, err := svc.Users.GetAll()
+
+  // Override the configured defaults for a specific call chain.
+  user, err := svc.Users.PreloadAll(true).Get(1)
+  filtered, err := svc.Users.Preload("Role").FindMany(services.Where("age > ?", 18))
 }
 ```
 
