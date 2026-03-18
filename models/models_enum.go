@@ -23,7 +23,7 @@ func (e Sex) ValidValues() []string {
 	}
 }
 
-func (e *Sex) Scan(src interface{}) error {
+func (e *Sex) Scan(src any) error {
 	source, ok := src.(string)
 	if !ok {
 		return fmt.Errorf("invalid value for %s: %s", "Sex", source)

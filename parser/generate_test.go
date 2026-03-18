@@ -55,12 +55,17 @@ func TestGenerateGORMServicesUsesPerQueryConfig(t *testing.T) {
 		},
 	}
 
-	generated, err := generateGORMServices(structs, cfg)
+	generatedFiles, err := generateGORMServiceFiles(structs, cfg)
 	if err != nil {
-		t.Fatalf("generateGORMServices returned error: %v", err)
+		t.Fatalf("generateGORMServiceFiles returned error: %v", err)
 	}
 
-	output := string(generated)
+	modelOutput, ok := generatedFiles["user_service.go"]
+	if !ok {
+		t.Fatalf("expected user_service.go to be generated")
+	}
+
+	output := string(modelOutput)
 	if !strings.Contains(output, "return repo.getByID(id, repo.shouldPreload(true), options...)") {
 		t.Fatalf("expected Get to use the model-specific preload default")
 	}
@@ -72,5 +77,18 @@ func TestGenerateGORMServicesUsesPerQueryConfig(t *testing.T) {
 	}
 	if !strings.Contains(output, "preloadConfigured bool") {
 		t.Fatalf("expected generated repo to track runtime preload overrides")
+	}
+
+	baseOutput, ok := generatedFiles["base_service.go"]
+	if !ok {
+		t.Fatalf("expected base_service.go to be generated")
+	}
+
+	base := string(baseOutput)
+	if !strings.Contains(base, "Registry map[string]any") {
+		t.Fatalf("expected Service registry to be generated in base service")
+	}
+	if !strings.Contains(base, "svc.Registry[\"User\"] = svc.UserService") {
+		t.Fatalf("expected User service to be registered in Service registry")
 	}
 }

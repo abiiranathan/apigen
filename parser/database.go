@@ -15,6 +15,9 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// PostgresConnection establishes a connection to a Postgres database using GORM.
+// It takes a DSN string, timezone, log level, and an optional log output writer.
+// If logOut is nil, it defaults to os.Stdout.
 func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, logOut io.Writer) (*gorm.DB, error) {
 	if logOut == nil{
 		logOut = os.Stdout
@@ -54,6 +57,7 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, l
 	return db, nil
 }
 
+// ping checks the database connection by pinging the underlying SQL DB.
 func ping(db *gorm.DB) error {
 	rawConn, err := db.DB()
 	if err != nil {
@@ -62,6 +66,7 @@ func ping(db *gorm.DB) error {
 	return rawConn.Ping()
 }
 
+// setConnPool configures the connection pool for the given GORM DB instance.
 func setConnPool(db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -72,7 +77,7 @@ func setConnPool(db *gorm.DB) error {
 	return nil
 }
 
-// Postgres configuration struct.
+// DatabaseConfig is a Postgres configuration struct.
 // Holds fields when a DSN is parsed from a string.
 type DatabaseConfig struct {
 	Database string // dbname
@@ -84,7 +89,7 @@ type DatabaseConfig struct {
 	Timezone string // Timezone
 }
 
-// parse postgres DSN into DatabaseConfig struct
+// ParseDSN parses a Postgres DSN into a DatabaseConfig struct.
 // If config is nil, it does nothing.
 func ParseDSN(dsn string, config *DatabaseConfig) {
 	if config == nil {

@@ -5,6 +5,7 @@ import (
 	"go/build"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/abiiranathan/apigen/config"
 )
@@ -23,9 +24,9 @@ func GetModulePath(targetDir string) (string, error) {
 	return pkg.ImportPath, nil
 }
 
-// GenerateGORMServices generates the service.go file
+// GenerateGORMServices generates service files in the configured output package.
 func GenerateGORMServices(cfg *config.Config, structMetaData []StructMeta) (err error) {
-	b, err := generateGORMServices(structMetaData, cfg)
+	files, err := generateGORMServiceFiles(structMetaData, cfg)
 	if err != nil {
 		return err
 	}
@@ -36,15 +37,30 @@ func GenerateGORMServices(cfg *config.Config, structMetaData []StructMeta) (err 
 		return fmt.Errorf("error creating directory %s: %w", cfg.Output.ServiceName, err)
 	}
 
-	targetPath := filepath.Join(targetDir, cfg.Output.ServiceName+".go")
-	err = writeFile(targetPath, b)
-	if err != nil {
-		return fmt.Errorf("error writing to file %q: %w", targetPath, err)
+	legacyPath := filepath.Join(targetDir, cfg.Output.ServiceName+".go")
+	if _, statErr := os.Stat(legacyPath); statErr == nil {
+		if removeErr := os.Remove(legacyPath); removeErr != nil {
+			return fmt.Errorf("error removing legacy file %q: %w", legacyPath, removeErr)
+		}
+	}
+
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		targetPath := filepath.Join(targetDir, name)
+		err = writeFile(targetPath, files[name])
+		if err != nil {
+			return fmt.Errorf("error writing to file %q: %w", targetPath, err)
+		}
 	}
 
 	// Generate the postgres database connection helpers
 	dbPath := filepath.Join(targetDir, "database.go")
-	err = writeFile(dbPath, []byte(fmt.Sprintf(dbText, cfg.Output.ServiceName)))
+	err = writeFile(dbPath, fmt.Appendf(nil, dbText, cfg.Output.ServiceName))
 	if err != nil {
 		fmt.Printf("error writing to database.go helper %q: %v", dbPath, err)
 	}
