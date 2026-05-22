@@ -28,7 +28,7 @@ func defineFlags(cli *goflag.CLI) {
 }
 
 func main() {
-	cli := goflag.New()
+	cli := goflag.New("apigen", "A code generator for GORM services and TypeScript types")
 	defineFlags(cli)
 
 	if len(os.Args) < 2 {
