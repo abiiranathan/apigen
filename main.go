@@ -44,23 +44,26 @@ func main() {
 
 	// If a subcommand is found, execute it and exit
 	if subcmd != nil {
-		subcmd.Handler()
+		err := subcmd.Handler(nil)
+		if err != nil {
+			log.Fatalf("error executing subcommand: %v\n", err)
+		}
 		os.Exit(0)
 	}
 }
 
-func generateCode() {
+func generateCode(any) error {
 	// Load configuration file
 	cfg, err := config.LoadConfig(configName)
 	if err != nil {
-		log.Fatalln(err)
+		return fmt.Errorf("error loading config file: %v", err)
 	}
 
 	// If tsTypesPath is not empty generate the types
 	if tsTypesPath != "" {
 		f, err := os.OpenFile(tsTypesPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 		if err != nil {
-			log.Fatalf("error creating file: %s - %v\n", tsTypesPath, err)
+			return fmt.Errorf("error opening typescript types file: %v", err)
 		}
 
 		meta := parser.Parse(cfg.Models.Pkgs)
@@ -71,23 +74,23 @@ func generateCode() {
 	metadata := parser.Parse(cfg.Models.Pkgs)
 	err = parser.GenerateGORMServices(cfg, metadata)
 	if err != nil {
-		log.Fatalln(err)
+		return fmt.Errorf("error generating code: %v", err)
 	}
-
-	os.Exit(0)
+	return nil
 }
 
-func initConfigFile() {
+func initConfigFile(any) error {
 	// If config file already exists, print message and return
 	if _, err := os.Stat(configName); err == nil {
 		fmt.Printf("config file already exists: %s\n", configName)
-		os.Exit(0)
+		return nil
 	}
 
 	// Write default text to config
 	err := os.WriteFile(configName, defaultConfig, 0644)
 	if err != nil {
-		log.Fatalf("error creating config file: %v\n", err)
+		return fmt.Errorf("error creating config file: %v", err)
 	}
-	os.Exit(0)
+	fmt.Printf("config file created: %s\n", configName)
+	return nil
 }

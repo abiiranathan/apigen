@@ -3,7 +3,7 @@ module github.com/abiiranathan/apigen
 go 1.26.0
 
 require (
-	github.com/abiiranathan/goflag v0.5.0
+	github.com/abiiranathan/goflag v0.7.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/pelletier/go-toml/v2 v2.3.1
 	golang.org/x/text v0.37.0

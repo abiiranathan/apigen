@@ -2,6 +2,8 @@ github.com/abiiranathan/goflag v0.3.0 h1:RRLFZX/OInrHiUmnmG8Y7TZ2pEUcsEEYw6fbug6
 github.com/abiiranathan/goflag v0.3.0/go.mod h1:52huTXtqWDTe378NcGNdVxMf5028jVoxv1ur16q04YI=
 github.com/abiiranathan/goflag v0.5.0 h1:hpfeYMXjkcD+2NxzgRMP4c0iM+uahtXzEMU4rvIPTjY=
 github.com/abiiranathan/goflag v0.5.0/go.mod h1:u3wgWjDku69nxHzl/wng+fWDZ/ZCPKAq0iFhteKjqTw=
+github.com/abiiranathan/goflag v0.7.0 h1:QcAeedgiLnIWuYuUc1X3wBtabiA+Zkr9nmqwy0ytMHE=
+github.com/abiiranathan/goflag v0.7.0/go.mod h1:u3wgWjDku69nxHzl/wng+fWDZ/ZCPKAq0iFhteKjqTw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
