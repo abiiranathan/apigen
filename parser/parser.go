@@ -545,11 +545,32 @@ func (s *Service) Rollback() error {
 	return s.DB.Rollback().Error
 }
 
+// WithTenant starts a transaction scoped to a tenant context, returning a transactional Service.
+func (s *Service) WithTenant(ctx context.Context, userID, hospitalID uint) (*Service, error) {
+	tx := s.DB.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	if err := tx.Exec("SELECT set_current_tenant(?);", hospitalID).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	if err := tx.Exec("SELECT set_current_user(?);", userID).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	return NewService(tx), nil
+}
+
 // NewService returns a Service that embeds all generated model services.
 func NewService(db *gorm.DB) *Service {
 	svc := &Service{
 		{{- range .}}
+		{{- if ne . "Service"}}
 		{{.}}Service: new{{.}}Service(db),
+		{{- end}}
 		{{- end}}
 		DB: db,
 	}
