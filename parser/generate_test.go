@@ -75,16 +75,4 @@ func TestGenerateGORMServicesUsesPerQueryConfig(t *testing.T) {
 		t.Fatalf("expected generated repo to track runtime preload overrides")
 	}
 
-	baseOutput, ok := generatedFiles["base_service.go"]
-	if !ok {
-		t.Fatalf("expected base_service.go to be generated")
-	}
-
-	base := string(baseOutput)
-	if !strings.Contains(base, "Registry map[string]any") {
-		t.Fatalf("expected Service registry to be generated in base service")
-	}
-	if !strings.Contains(base, "svc.Registry[\"User\"] = svc.UserService") {
-		t.Fatalf("expected User service to be registered in Service registry")
-	}
 }

@@ -81,7 +81,8 @@ func generateInterfaces(
 			// Check if there is an override for this field
 			if overrideType, ok := overrides.Fields[fieldName]; ok {
 				builder.WriteString(": ")
-				builder.WriteString(overrideType + ";\n")
+				builder.WriteString(overrideType)
+				builder.WriteString(";\n")
 				continue
 			}
 
@@ -122,8 +123,9 @@ func generateInterfaces(
 	}
 }
 
-// Generate typescript interfaces given the map of parser StructMeta.
-// Generated code is written to w.
+// GenerateTypescriptInterfaces generates corresponding typescript types/interfaces
+// given the map of parser StructMeta.
+// Generated code is written to the passed io.Writer, w
 func GenerateTypescriptInterfaces(
 	output io.Writer,
 	inputs map[string]parser.StructMeta,
