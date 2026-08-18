@@ -4,10 +4,16 @@
 package rawgen
 
 import (
+	"bytes"
 	"fmt"
+	"go/format"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -34,6 +40,13 @@ type Options struct {
 
 	// TableName overrides the default snake_case plural table name.
 	TableName string
+
+	// EstimatedRows, when > 0, preallocates the results slice returned by
+	// Query<Model>s with this capacity (make([]*T, 0, EstimatedRows)),
+	// avoiding repeated slice growth for callers with a known typical
+	// result-set size (e.g. a page size or LIMIT value). Zero means no hint:
+	// the generated code falls back to a nil slice grown by append, as before.
+	EstimatedRows int
 }
 
 // Filter represents a custom WHERE clause added to the generated Query function.
@@ -59,20 +72,37 @@ type column struct {
 }
 
 type templateData struct {
-	ModelName    string
-	ModelPkg     string
-	ModelPkgName string
-	TableName    string
-	Ident        string
-	Columns      []column
-	PKCol        *column
-	Filters      []Filter
+	ModelName     string
+	ModelPkg      string
+	ModelPkgName  string
+	TableName     string
+	Ident         string
+	Columns       []column
+	PKCol         *column
+	Filters       []Filter
+	EstimatedRows int // Mirrors Options.EstimatedRows; 0 means no preallocation hint.
+}
+
+func (d templateData) hasNullableFilters() bool {
+	for _, f := range d.Filters {
+		if f.Nullable {
+			return true
+		}
+	}
+	return false
+}
+
+func (d templateData) allFiltersRequired() bool {
+	return len(d.Filters) > 0 && !d.hasNullableFilters()
 }
 
 // Generate writes raw PostgreSQL Go code to w for the specified model.
 func Generate(w io.Writer, meta []parser.StructMeta, opts Options) error {
 	if opts.ModelName == "" {
 		return fmt.Errorf("rawgen: Options.ModelName must not be empty")
+	}
+	if opts.EstimatedRows < 0 {
+		return fmt.Errorf("rawgen: Options.EstimatedRows must not be negative, got %d", opts.EstimatedRows)
 	}
 
 	target, err := findStruct(meta, opts.ModelName)
@@ -99,14 +129,15 @@ func Generate(w io.Writer, meta []parser.StructMeta, opts Options) error {
 	}
 
 	data := templateData{
-		ModelName:    opts.ModelName,
-		ModelPkg:     opts.ModelPkg,
-		ModelPkgName: pkgName,
-		TableName:    formatIdent(tableName),
-		Ident:        receiverIdent(opts.ModelName),
-		Columns:      cols,
-		PKCol:        findPK(cols),
-		Filters:      opts.Filters,
+		ModelName:     opts.ModelName,
+		ModelPkg:      opts.ModelPkg,
+		ModelPkgName:  pkgName,
+		TableName:     formatIdent(tableName),
+		Ident:         receiverIdent(opts.ModelName),
+		Columns:       cols,
+		PKCol:         findPK(cols),
+		Filters:       opts.Filters,
+		EstimatedRows: opts.EstimatedRows,
 	}
 
 	return writeCode(w, data)
@@ -227,8 +258,8 @@ func writeHeader(b *strings.Builder, d templateData) {
 	fmt.Fprintf(b, "import (\n")
 	fmt.Fprintf(b, "\t\"context\"\n")
 	fmt.Fprintf(b, "\t\"database/sql\"\n")
-	fmt.Fprintf(b, "\t\"fmt\"\n")
-	if len(d.Filters) > 0 {
+	if d.hasNullableFilters() {
+		fmt.Fprintf(b, "\t\"strconv\"\n")
 		fmt.Fprintf(b, "\t\"strings\"\n")
 	}
 	fmt.Fprintf(b, "\n\t%q\n", d.ModelPkg)
@@ -253,7 +284,7 @@ func writeInsert(b *strings.Builder, d templateData) {
 	} else {
 		fmt.Fprintf(b, ".\n")
 	}
-	fmt.Fprintf(b, "func Insert%s(ctx context.Context, db *sql.DB, %s *%s.%s) error {\n",
+	fmt.Fprintf(b, "func Insert%s(ctx context.Context, db DBTX, %s *%s.%s) error {\n",
 		d.ModelName, d.Ident, d.ModelPkgName, d.ModelName)
 	fmt.Fprintf(b, "\tconst query = `INSERT INTO %s (%s) VALUES (%s)",
 		d.TableName, strings.Join(colNames, ", "), strings.Join(placeholders, ", "))
@@ -284,7 +315,7 @@ func writeGet(b *strings.Builder, d templateData) {
 	scanFields := scanFieldList(d.Columns, d.Ident)
 
 	fmt.Fprintf(b, "// Get%s retrieves a single %s by primary key.\n", d.ModelName, d.ModelName)
-	fmt.Fprintf(b, "func Get%s(ctx context.Context, db *sql.DB, id %s) (*%s.%s, error) {\n",
+	fmt.Fprintf(b, "func Get%s(ctx context.Context, db DBTX, id %s) (*%s.%s, error) {\n",
 		d.ModelName, d.PKCol.GoType, d.ModelPkgName, d.ModelName)
 	fmt.Fprintf(b, "\tconst query = `SELECT %s FROM %s WHERE %s = $1`\n",
 		colList, d.TableName, d.PKCol.ColName)
@@ -302,8 +333,9 @@ func writeQuery(b *strings.Builder, d templateData) {
 	colList := columnList(d.Columns)
 	scanFields := scanFieldList(d.Columns, d.Ident)
 
+	// Build function parameter list
 	var params strings.Builder
-	params.WriteString("ctx context.Context, db *sql.DB")
+	params.WriteString("ctx context.Context, db DBTX")
 	for _, f := range d.Filters {
 		paramName := strcase.ToLowerCamel(f.Column)
 		if f.Nullable {
@@ -315,42 +347,68 @@ func writeQuery(b *strings.Builder, d templateData) {
 
 	fmt.Fprintf(b, "// Query%ss retrieves %s records matching the provided filters.\n", d.ModelName, d.ModelName)
 	fmt.Fprintf(b, "func Query%ss(%s) ([]*%s.%s, error) {\n", d.ModelName, params.String(), d.ModelPkgName, d.ModelName)
-	fmt.Fprintf(b, "\tbaseQuery := `SELECT %s FROM %s`\n", colList, d.TableName)
 
-	if len(d.Filters) > 0 {
-		fmt.Fprintf(b, "\n\tconditions := make([]string, 0, %d)\n", len(d.Filters))
+	// CASE A: No Filters -> Compile-time constant
+	if len(d.Filters) == 0 {
+		fmt.Fprintf(b, "\tconst query = `SELECT %s FROM %s`\n", colList, d.TableName)
+		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, query)\n")
+
+		// CASE B: All Required Filters -> 100% Compile-time constant (Zero Runtime Allocations)
+	} else if d.allFiltersRequired() {
+		whereClauses := make([]string, len(d.Filters))
+		args := make([]string, len(d.Filters))
+		for i, f := range d.Filters {
+			colName := formatIdent(strcase.ToSnake(f.Column))
+			paramName := strcase.ToLowerCamel(f.Column)
+			whereClauses[i] = fmt.Sprintf("%s %s $%d", colName, f.Op, i+1)
+			args[i] = paramName
+		}
+
+		fmt.Fprintf(b, "\tconst query = `SELECT %s FROM %s WHERE %s`\n",
+			colList, d.TableName, strings.Join(whereClauses, " AND "))
+		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, query, %s)\n", strings.Join(args, ", "))
+
+		// CASE C: Nullable / Dynamic Filters -> Pre-allocated strings.Builder
+	} else {
+		fmt.Fprintf(b, "\tconst baseQuery = `SELECT %s FROM %s`\n", colList, d.TableName)
+		fmt.Fprintf(b, "\tvar query strings.Builder\n")
+		fmt.Fprintf(b, "\tquery.Grow(len(baseQuery) + %d)\n", len(d.Filters)*32)
+		fmt.Fprintf(b, "\tquery.WriteString(baseQuery)\n\n")
+
 		fmt.Fprintf(b, "\targs := make([]any, 0, %d)\n", len(d.Filters))
-		fmt.Fprintf(b, "\tparamIdx := 1\n\n")
+		fmt.Fprintf(b, "\thasWhere := false\n\n")
 
 		for _, f := range d.Filters {
 			paramName := strcase.ToLowerCamel(f.Column)
 			colName := formatIdent(strcase.ToSnake(f.Column))
+
 			if f.Nullable {
 				fmt.Fprintf(b, "\tif %s != nil {\n", paramName)
-				fmt.Fprintf(b, "\t\tconditions = append(conditions, fmt.Sprintf(\"%s %s $%%d\", paramIdx))\n", colName, f.Op)
+				fmt.Fprintf(b, "\t\tif !hasWhere {\n\t\t\tquery.WriteString(\" WHERE \")\n\t\t\thasWhere = true\n\t\t} else {\n\t\t\tquery.WriteString(\" AND \")\n\t\t}\n")
+				fmt.Fprintf(b, "\t\tquery.WriteString(\"%s %s $\")\n", colName, f.Op)
+				fmt.Fprintf(b, "\t\tquery.WriteString(strconv.Itoa(len(args) + 1))\n")
 				fmt.Fprintf(b, "\t\targs = append(args, *%s)\n", paramName)
-				fmt.Fprintf(b, "\t\tparamIdx++\n")
 				fmt.Fprintf(b, "\t}\n")
 			} else {
-				fmt.Fprintf(b, "\tconditions = append(conditions, fmt.Sprintf(\"%s %s $%%d\", paramIdx))\n", colName, f.Op)
+				fmt.Fprintf(b, "\tif !hasWhere {\n\t\tquery.WriteString(\" WHERE \")\n\t\thasWhere = true\n\t} else {\n\t\tquery.WriteString(\" AND \")\n\t}\n")
+				fmt.Fprintf(b, "\tquery.WriteString(\"%s %s $\")\n", colName, f.Op)
+				fmt.Fprintf(b, "\tquery.WriteString(strconv.Itoa(len(args) + 1))\n")
 				fmt.Fprintf(b, "\targs = append(args, %s)\n", paramName)
-				fmt.Fprintf(b, "\tparamIdx++\n\n")
 			}
 		}
 
-		fmt.Fprintf(b, "\tif len(conditions) > 0 {\n")
-		fmt.Fprintf(b, "\t\tbaseQuery += \" WHERE \" + strings.Join(conditions, \" AND \")\n")
-		fmt.Fprintf(b, "\t}\n\n")
-		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, baseQuery, args...)\n")
-	} else {
-		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, baseQuery)\n")
+		fmt.Fprintf(b, "\n\trows, err := db.QueryContext(ctx, query.String(), args...)\n")
 	}
 
 	fmt.Fprintf(b, "\tif err != nil {\n")
 	fmt.Fprintf(b, "\t\treturn nil, err\n")
 	fmt.Fprintf(b, "\t}\n")
 	fmt.Fprintf(b, "\tdefer rows.Close()\n\n")
-	fmt.Fprintf(b, "\tvar results []*%s.%s\n", d.ModelPkgName, d.ModelName)
+	if d.EstimatedRows > 0 {
+		fmt.Fprintf(b, "\tresults := make([]*%s.%s, 0, %d)\n", d.ModelPkgName, d.ModelName, d.EstimatedRows)
+	} else {
+		fmt.Fprintf(b, "\tvar results []*%s.%s\n", d.ModelPkgName, d.ModelName)
+	}
 	fmt.Fprintf(b, "\tfor rows.Next() {\n")
 	fmt.Fprintf(b, "\t\tvar %s %s.%s\n", d.Ident, d.ModelPkgName, d.ModelName)
 	fmt.Fprintf(b, "\t\tif err := rows.Scan(\n")
@@ -369,7 +427,7 @@ func writeQuery(b *strings.Builder, d templateData) {
 
 func writeDelete(b *strings.Builder, d templateData) {
 	fmt.Fprintf(b, "// Delete%s deletes a %s by primary key.\n", d.ModelName, d.ModelName)
-	fmt.Fprintf(b, "func Delete%s(ctx context.Context, db *sql.DB, id %s) error {\n",
+	fmt.Fprintf(b, "func Delete%s(ctx context.Context, db DBTX, id %s) error {\n",
 		d.ModelName, d.PKCol.GoType)
 	fmt.Fprintf(b, "\tconst query = `DELETE FROM %s WHERE %s = $1`\n", d.TableName, d.PKCol.ColName)
 	fmt.Fprintf(b, "\tresult, err := db.ExecContext(ctx, query, id)\n")
@@ -396,7 +454,7 @@ func writeUpdate(b *strings.Builder, d templateData) {
 	pkParam := fmt.Sprintf("$%d", len(updateCols)+1)
 
 	fmt.Fprintf(b, "// Update%s updates all columns of a %s by primary key.\n", d.ModelName, d.ModelName)
-	fmt.Fprintf(b, "func Update%s(ctx context.Context, db *sql.DB, %s *%s.%s) error {\n",
+	fmt.Fprintf(b, "func Update%s(ctx context.Context, db DBTX, %s *%s.%s) error {\n",
 		d.ModelName, d.Ident, d.ModelPkgName, d.ModelName)
 	fmt.Fprintf(b, "\tconst query = `UPDATE %s SET %s WHERE %s = %s`\n",
 		d.TableName, strings.Join(setClauses, ", "), d.PKCol.ColName, pkParam)
@@ -444,4 +502,143 @@ func scanFieldList(cols []column, ident string) string {
 		fields[i] = fmt.Sprintf("&%s.%s", ident, c.GoName)
 	}
 	return strings.Join(fields, ", ")
+}
+
+// PackageOptions controls batch code generation for an entire package of models.
+type PackageOptions struct {
+	// OutputDir is the target directory where files will be written (e.g. "queries").
+	OutputDir string
+
+	// PackageName is the Go package declaration name for generated files (default: "queries").
+	PackageName string
+
+	// Skip contains struct names to exclude from generation.
+	Skip []string
+
+	// ModelOverrides allows custom per-model Options (e.g. filters, custom table names).
+	ModelOverrides map[string]Options
+}
+
+// GeneratePackage generates raw SQL query files for all models in meta and writes
+// each model into a separate file in opts.OutputDir, along with dbtx.go.
+func GeneratePackage(meta []parser.StructMeta, opts PackageOptions) error {
+	if opts.OutputDir == "" {
+		opts.OutputDir = "queries"
+	}
+	if opts.PackageName == "" {
+		opts.PackageName = filepath.Base(opts.OutputDir)
+		if opts.PackageName == "." || opts.PackageName == "/" {
+			opts.PackageName = "queries"
+		}
+	}
+
+	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
+		return fmt.Errorf("rawgen: failed to create output directory %q: %w", opts.OutputDir, err)
+	}
+
+	// Write dbtx.go
+	var dbtxBuf bytes.Buffer
+	if err := WriteDBTX(&dbtxBuf); err != nil {
+		return err
+	}
+	dbtxPath := filepath.Join(opts.OutputDir, "dbtx.go")
+	if err := writeIfChanged(dbtxPath, dbtxBuf.Bytes()); err != nil {
+		return fmt.Errorf("rawgen: failed to write %s: %w", dbtxPath, err)
+	}
+
+	// Filter structs to generate
+	var targets []parser.StructMeta
+	for _, st := range meta {
+		if st.Skip || slices.Contains(opts.Skip, st.Name) {
+			continue
+		}
+
+		// Skip structs with no non-relation fields
+		cols := resolveColumns(&st, Options{ModelName: st.Name})
+		if len(cols) == 0 {
+			continue
+		}
+		targets = append(targets, st)
+	}
+
+	// Concurrently generate and format each model file
+	numWorkers := max(min(runtime.NumCPU(), len(targets)), 1)
+
+	type fileResult struct {
+		path    string
+		content []byte
+		err     error
+	}
+
+	tasks := make(chan parser.StructMeta, len(targets))
+	results := make(chan fileResult, len(targets))
+	var wg sync.WaitGroup
+
+	for range numWorkers {
+		wg.Go(func() {
+			for st := range tasks {
+				modelOpts, exists := opts.ModelOverrides[st.Name]
+				if !exists {
+					modelOpts = Options{
+						ModelName: st.Name,
+						ModelPkg:  st.Package,
+					}
+				} else {
+					if modelOpts.ModelName == "" {
+						modelOpts.ModelName = st.Name
+					}
+					if modelOpts.ModelPkg == "" {
+						modelOpts.ModelPkg = st.Package
+					}
+				}
+
+				var buf bytes.Buffer
+				if err := Generate(&buf, meta, modelOpts); err != nil {
+					results <- fileResult{err: fmt.Errorf("error generating %s: %w", st.Name, err)}
+					continue
+				}
+
+				formatted, err := format.Source(buf.Bytes())
+				if err != nil {
+					results <- fileResult{err: fmt.Errorf("error formatting %s: %w", st.Name, err)}
+					continue
+				}
+
+				fileName := strcase.ToSnake(st.Name) + ".go"
+				filePath := filepath.Join(opts.OutputDir, fileName)
+				results <- fileResult{
+					path:    filePath,
+					content: formatted,
+				}
+			}
+		})
+	}
+
+	for _, st := range targets {
+		tasks <- st
+	}
+	close(tasks)
+
+	wg.Wait()
+	close(results)
+
+	// 4. Write generated files to disk (using atomic write-if-changed)
+	for res := range results {
+		if res.err != nil {
+			return res.err
+		}
+		if err := writeIfChanged(res.path, res.content); err != nil {
+			return fmt.Errorf("rawgen: failed to write %s: %w", res.path, err)
+		}
+	}
+
+	return nil
+}
+
+func writeIfChanged(path string, data []byte) error {
+	existing, err := os.ReadFile(path)
+	if err == nil && bytes.Equal(existing, data) {
+		return nil // Content is identical; preserve file timestamp
+	}
+	return os.WriteFile(path, data, 0644)
 }

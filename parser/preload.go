@@ -23,7 +23,7 @@ func dedupePreloads(preloads []string) []string {
 
 	// In-place deduplication and leaf filtering
 	w := 0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		current := preloads[i]
 
 		// Skip duplicate identical entries

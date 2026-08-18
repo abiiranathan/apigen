@@ -1,538 +1,218 @@
-# rawgen Package Documentation
+# rawgen
 
-## Overview
+`rawgen` is a high-performance code generator for Go that produces type-safe, boilerplate-free PostgreSQL database code from your model structs. It runs directly on Go's standard `database/sql` package without any ORM overhead or runtime reflection.
 
-`rawgen` is a code generator that produces raw PostgreSQL Go database code for model structs. It generates type-safe CRUD (Create, Read, Update, Delete, Query) functions that use `database/sql` directly without any ORM overhead.
+You can think of it as a simple opposite of `sqlc` for when you want simple CRUD queries for your models.
+---
 
-**Package Path:** `github.com/abiiranathan/apigen/rawgen`
+## Key Advantages
 
-## Purpose
+* **Zero ORM Overhead**: Generates idiomatic, direct `database/sql` queries and scan loops with maximum execution speed and zero reflection.
+* **Unified DB & Transaction Support (`DBTX`)**: Every generated function accepts the `DBTX` interface. You can pass either a `*sql.DB` connection pool or a `*sql.Tx` transaction without changing code.
+* **Compile-Time Constant Queries**: Fully optimizes static and fixed-filter queries into Go compile-time `const` strings, eliminating runtime string formatting and slice allocations.
+* **Smart / Selective Quoting**: Automatically quotes only PostgreSQL reserved keywords (like `"order"`, `"user"`), preserving clean, readable SQL for standard identifiers.
+* **Context-Aware**: All operations accept `context.Context` for cancellation, timeouts, and distributed tracing.
+* **Slice Preallocation (`EstimatedRows`)**: Optional slice capacity hints eliminate dynamic slice reallocations on list queries.
+* **Clean Separation of Concerns**: Relation fields (`many2many`, `foreignKey`) are automatically detected and omitted from raw table mutations.
 
-The `rawgen` package provides a declarative way to generate efficient, low-level database access functions. Instead of manually writing SQL queries and row scanning logic, you define generation options and `rawgen` produces:
+---
 
-- `Insert<Model>()` - Create new records
-- `Get<Model>()` - Retrieve single record by primary key
-- `Update<Model>()` - Update record by primary key
-- `Delete<Model>()` - Delete record by primary key
-- `Query<Model>s()` - Query multiple records with optional filters
+## Installation
 
-## Key Features
+Install the CLI tool using `go install`:
 
-- **Zero ORM overhead** - Uses `database/sql` directly
-- **Context-aware** - All functions accept `context.Context` for cancellation and timeouts
-- **Flexible field selection** - Include or exclude specific columns
-- **Custom WHERE clauses** - Define filters with nullable parameter support
-- **Reserved keyword handling** - Automatically quotes PostgreSQL reserved words in identifiers
-- **Automatic table naming** - Defaults to snake_case plural of model name
-- **Foreign key awareness** - Excludes relation fields from SQL queries
-- **Primary key handling** - Generates RETURNING clauses for auto-increment PKs
-- **Comprehensive testing** - Extensive test coverage via `rawgen_test.go`
+```bash
+go install github.com/abiiranathan/apigen/cmd/rawgen@latest
+```
 
-## Architecture
-
-### Types
-
-#### `Options`
-Configures code generation behavior:
+Or import the generator directly in your Go code:
 
 ```go
-type Options struct {
-    ModelName    string   // Struct name to generate for (required, e.g. "User")
-    ModelPkg     string   // Import path of models package
-    SelectFields []string // Limit SELECT columns (empty = all non-relation fields)
-    OmitFields   []string // Exclude columns from all queries
-    Filters      []Filter // Custom WHERE clauses for Query function
-    TableName    string   // Override default snake_case plural table name
+import "github.com/abiiranathan/apigen/rawgen"
+```
+
+---
+
+## Structure of Generated Code
+
+When you generate code for a model (e.g. `User`), `rawgen` creates standard Go functions in a target package (default `queries`):
+
+### 1. The `DBTX` Interface (`dbtx.go`)
+Generated once per output package to enable seamless transactions and connection pooling:
+
+```go
+type DBTX interface {
+    ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+    QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+    QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 ```
 
-#### `Filter`
-Defines custom WHERE clause conditions in the Query function:
+### 2. CRUD Operations (`<model>.go`)
 
-```go
-type Filter struct {
-    Column   string // Go field name (will be snake_cased for SQL)
-    Op       string // SQL operator (=, >, <, ILIKE, IN, etc.)
-    GoType   string // Go type for function parameter (string, int, *int, etc.)
-    Nullable bool   // When true, wraps condition in nil-check for optional filters
-}
-```
+| Function   | Signature                              | Description                                                               |
+| ---------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| **Insert** | `Insert<Model>(ctx, db, record)`       | Inserts non-PK fields and populates generated ID via `RETURNING id`.      |
+| **Get**    | `Get<Model>(ctx, db, id)`              | Selects a single record by primary key (`WHERE id = $1`).                 |
+| **Update** | `Update<Model>(ctx, db, record)`       | Updates all columns by primary key. Returns `sql.ErrNoRows` if not found. |
+| **Delete** | `Delete<Model>(ctx, db, id)`           | Deletes a record by primary key. Returns `sql.ErrNoRows` if not found.    |
+| **Query**  | `Query<Model>s(ctx, db, [filters...])` | Retrieves a slice of records matching compile-time or dynamic filters.    |
 
-### Internal Types
+---
 
-#### `column`
-Resolved metadata for a single database column:
-- `GoName` - Go field name (e.g., "Name")
-- `ColName` - SQL identifier, quoted if reserved keyword (e.g., "name" or `"order"`)
-- `GoType` - Go type from struct definition (e.g., "string")
-- `IsFK` - True for foreign key/relation fields (excluded from queries)
-- `IsPK` - True for primary key field ("ID")
-- `BaseType` - Type with pointer/slice wrappers stripped
-
-#### `templateData`
-Aggregated data passed to code generation functions:
-- Model and package information
-- Resolved columns with metadata
-- Primary key column reference
-- Applied filters
-
-## Public API
-
-### Main Function
-
-#### `Generate(w io.Writer, meta []parser.StructMeta, opts Options) error`
-
-Generates raw PostgreSQL Go code and writes it to the provided writer.
-
-**Parameters:**
-- `w` - Output writer (file, buffer, etc.)
-- `meta` - Parsed struct metadata from parser package
-- `opts` - Generation options
-
-**Returns:**
-- Error if model not found, no columns after filtering, or write fails
-
-**Example:**
-```go
-opts := rawgen.Options{
-    ModelName: "User",
-    ModelPkg:  "github.com/myapp/models",
-}
-if err := rawgen.Generate(os.Stdout, parsedMeta, opts); err != nil {
-    log.Fatal(err)
-}
-```
-
-## Code Generation Details
-
-### Generated Output Structure
-
-All generated code is placed in a `queries` package with standardized imports:
-```go
-package queries
-
-import (
-    "context"
-    "database/sql"
-    "fmt"
-    "strings"        // Only if filters present
-    
-    "github.com/user/app/models"
-)
-```
-
-### Insert Function
-
-**Signature:** `func Insert<Model>(ctx context.Context, db *sql.DB, m *models.<Model>) error`
-
-**Behavior:**
-- Excludes primary key (assumes auto-increment)
-- Uses `RETURNING id` to populate the generated ID
-- For models without PK, uses `ExecContext` instead of `QueryRowContext`
-- Accepts context for cancellation/timeout control
-
-**Example Output (User model):**
-```go
-func InsertUser(ctx context.Context, db *sql.DB, u *models.User) error {
-    const query = `INSERT INTO users (name, age, discount, role_id) VALUES ($1, $2, $3, $4) RETURNING id`
-    return db.QueryRowContext(ctx, query,
-        u.Name,
-        u.Age,
-        u.Discount,
-        u.RoleID,
-    ).Scan(&u.ID)
-}
-```
-
-### Get Function
-
-**Signature:** `func Get<Model>(ctx context.Context, db *sql.DB, id <PK_Type>) (*models.<Model>, error)`
-
-**Behavior:**
-- Retrieves single record by primary key
-- Selects all non-relation columns
-- Returns pointer to populated model or error
-
-**Example Output:**
-```go
-func GetUser(ctx context.Context, db *sql.DB, id int) (*models.User, error) {
-    const query = `SELECT id, name, age, discount, role_id FROM users WHERE id = $1`
-    var u models.User
-    if err := db.QueryRowContext(ctx, query, id).Scan(
-        &u.ID, &u.Name, &u.Age, &u.Discount, &u.RoleID,
-    ); err != nil {
-        return nil, err
-    }
-    return &u, nil
-}
-```
-
-### Query Function
-
-**Signature:** `func Query<Model>s(ctx context.Context, db *sql.DB[, filter1 type1, ...]) ([]*models.<Model>, error)`
-
-**Behavior:**
-- Retrieves multiple records
-- Supports zero or more filter parameters
-- For nullable filters, only applies condition when parameter is non-nil
-- Uses `strings.Join` to build WHERE clause dynamically
-- Handles proper parameter indexing with `fmt.Sprintf`
-
-**Example Output (with filters):**
-```go
-func QueryUsers(ctx context.Context, db *sql.DB, age int, name string) ([]*models.User, error) {
-    baseQuery := `SELECT id, name, age, discount, role_id FROM users`
-    
-    conditions := make([]string, 0, 2)
-    args := make([]any, 0, 2)
-    paramIdx := 1
-
-    conditions = append(conditions, fmt.Sprintf("age > $%d", paramIdx))
-    args = append(args, age)
-    paramIdx++
-
-    conditions = append(conditions, fmt.Sprintf("name ILIKE $%d", paramIdx))
-    args = append(args, name)
-    paramIdx++
-
-    baseQuery += " WHERE " + strings.Join(conditions, " AND ")
-
-    rows, err := db.QueryContext(ctx, baseQuery, args...)
-    // ... row iteration and scanning
-}
-```
-
-**Example Output (with nullable filter):**
-```go
-func QueryUsers(ctx context.Context, db *sql.DB, age *int) ([]*models.User, error) {
-    baseQuery := `SELECT id, name, age, discount, role_id FROM users`
-    
-    conditions := make([]string, 0, 1)
-    args := make([]any, 0, 1)
-    paramIdx := 1
-
-    if age != nil {
-        conditions = append(conditions, fmt.Sprintf("age > $%d", paramIdx))
-        args = append(args, *age)
-        paramIdx++
-    }
-    
-    if len(conditions) > 0 {
-        baseQuery += " WHERE " + strings.Join(conditions, " AND ")
-    }
-    // ... rest of function
-}
-```
-
-### Update Function
-
-**Signature:** `func Update<Model>(ctx context.Context, db *sql.DB, m *models.<Model>) error`
-
-**Behavior:**
-- Updates all non-PK columns for a record
-- Matches by primary key
-- Returns `sql.ErrNoRows` if no row matched
-
-**Example Output:**
-```go
-func UpdateUser(ctx context.Context, db *sql.DB, u *models.User) error {
-    const query = `UPDATE users SET name = $1, age = $2, discount = $3, role_id = $4 WHERE id = $5`
-    result, err := db.ExecContext(ctx, query,
-        u.Name,
-        u.Age,
-        u.Discount,
-        u.RoleID,
-        u.ID,
-    )
-    if err != nil {
-        return err
-    }
-    rows, err := result.RowsAffected()
-    if err != nil {
-        return err
-    }
-    if rows == 0 {
-        return sql.ErrNoRows
-    }
-    return nil
-}
-```
-
-### Delete Function
-
-**Signature:** `func Delete<Model>(ctx context.Context, db *sql.DB, id <PK_Type>) error`
-
-**Behavior:**
-- Deletes single record by primary key
-- Returns `sql.ErrNoRows` if no row matched
-
-**Example Output:**
-```go
-func DeleteUser(ctx context.Context, db *sql.DB, id int) error {
-    const query = `DELETE FROM users WHERE id = $1`
-    result, err := db.ExecContext(ctx, query, id)
-    if err != nil {
-        return err
-    }
-    rows, err := result.RowsAffected()
-    if err != nil {
-        return err
-    }
-    if rows == 0 {
-        return sql.ErrNoRows
-    }
-    return nil
-}
-```
-
-## Column Resolution
-
-### Field Filtering
-
-Generated code includes only columns meeting ALL criteria:
-1. Field is not marked as `Preload: true` (i.e., not a relation)
-2. If `SelectFields` specified, field must be in the list
-3. If `OmitFields` specified, field must NOT be in the list
-
-### Identifier Formatting
-
-Column identifiers are processed via `formatIdent()`:
-1. **Reserved keywords** - Quoted if in PostgreSQL reserved words list
-2. **Invalid characters** - Quoted if contains non-alphanumeric/underscore characters
-3. **Normal identifiers** - Lowercased without quotes
-
-**Examples:**
-- `"order"` (reserved keyword)
-- `user_name` (normal)
-- `"user"` (reserved keyword)
-
-## Usage Patterns
-
-### Basic Generation (All Fields)
-
-```go
-opts := rawgen.Options{
-    ModelName: "User",
-    ModelPkg:  "github.com/myapp/models",
-}
-if err := rawgen.Generate(file, parsedMeta, opts); err != nil {
-    log.Fatal(err)
-}
-```
-
-### Select Specific Columns Only
-
-```go
-opts := rawgen.Options{
-    ModelName:    "User",
-    ModelPkg:     "github.com/myapp/models",
-    SelectFields: []string{"ID", "Name", "Email"},
-}
-```
-
-### Omit Sensitive Fields
-
-```go
-opts := rawgen.Options{
-    ModelName:  "User",
-    ModelPkg:   "github.com/myapp/models",
-    OmitFields: []string{"PasswordHash", "RefreshToken"},
-}
-```
-
-### Add Query Filters
-
-```go
-opts := rawgen.Options{
-    ModelName: "User",
-    ModelPkg:  "github.com/myapp/models",
-    Filters: []rawgen.Filter{
-        {Column: "Age", Op: ">", GoType: "int"},
-        {Column: "Name", Op: "ILIKE", GoType: "string"},
-    },
-}
-```
-
-### Nullable Filters (Optional Parameters)
-
-```go
-opts := rawgen.Options{
-    ModelName: "User",
-    ModelPkg:  "github.com/myapp/models",
-    Filters: []rawgen.Filter{
-        {Column: "Age", Op: ">", GoType: "int", Nullable: true},
-        {Column: "Status", Op: "=", GoType: "string", Nullable: true},
-    },
-}
-// Generates function:
-// func QueryUsers(ctx context.Context, db *sql.DB, age *int, status *string)
-// Filter only applied if parameter is non-nil
-```
-
-### Custom Table Name
-
-```go
-opts := rawgen.Options{
-    ModelName: "User",
-    ModelPkg:  "github.com/myapp/models",
-    TableName: "app_users", // Instead of default "users"
-}
-```
-
-## CLI Tool Usage
-
-The `rawgen` CLI in `cmd/rawgen/main.go` provides command-line access to code generation:
+## CLI Usage
 
 ### Basic Usage
 
+Generate CRUD operations for a `User` struct defined in your models package:
+
 ```bash
-rawgen -model User
+rawgen -model User > queries/user.go
+```
+
+Generate the shared `dbtx.go` interface:
+
+```bash
+rawgen -dbtx > queries/dbtx.go
 ```
 
 ### Common Flags
 
-- `-config string` - Path to apigen.toml (default: "apigen.toml")
-- `-model string` - Model struct name (required)
-- `-table string` - Override table name
-- `-select string` - Comma-separated field names to include
-- `-omit string` - Comma-separated field names to exclude
-- `-filter string` - Custom filters as "Column:Op:GoType" (repeatable)
-- `-nullable-filter string` - Same as -filter but with nullable parameters
+| Flag               | Type     | Description                                                                         |
+| ------------------ | -------- | ----------------------------------------------------------------------------------- |
+| `-model`           | `string` | Struct name to generate for (**required**, e.g. `User`)                             |
+| `-config`          | `string` | Path to configuration file (default: `apigen.toml`)                                 |
+| `-table`           | `string` | Override default table name (defaults to snake_case plural)                         |
+| `-select`          | `string` | Comma-separated list of fields to include exclusively                               |
+| `-omit`            | `string` | Comma-separated list of fields to exclude from queries                              |
+| `-filter`          | `string` | Required filters as `Column:Op:GoType` (e.g. `Age:>:int`)                           |
+| `-nullable-filter` | `string` | Optional/nullable filters (accepts pointer param e.g. `Age:>:int` $\to$ `age *int`) |
+| `-rows`            | `int`    | Preallocation capacity hint for result slices                                       |
 
-### Examples
+---
 
+## CLI Examples
+
+### 1. Select Specific Fields
 ```bash
-# Generate all fields for User model
-rawgen -model User
-
-# Select specific fields only
-rawgen -model User -select "ID,Name,Email"
-
-# Exclude fields
-rawgen -model User -omit "Discount"
-
-# Add filters
-rawgen -model User -filter "Age:>:int,Name:ILIKE:string"
-
-# Nullable filters (optional parameters)
-rawgen -model User -nullable-filter "Age:>:int"
-
-# Output to file
-rawgen -model User > queries/user.go && gofmt -w queries/user.go
-
-# Custom table name
-rawgen -model User -table "app_users"
+rawgen -model User -select "ID,Name,Email" > queries/user.go
 ```
 
-## Testing
-
-### Test Coverage
-
-The `rawgen_test.go` file provides comprehensive test coverage:
-
-#### Basic Tests
-- `TestBasicGeneration` - All generated functions and SQL statements
-- `TestRelationFieldsExcluded` - Foreign key fields excluded from SQL
-
-#### Field Selection Tests
-- `TestSelectFields` - Only selected fields included
-- `TestOmitFields` - Specified fields excluded
-- `TestOmitMultipleFields` - Multiple fields excluded correctly
-
-#### Advanced Tests
-- `TestCustomTableName` - Table name override works
-- `TestReservedKeywordsAreQuoted` - PostgreSQL keywords properly quoted
-- `TestRequiredFilters` - Multiple required filter parameters
-- `TestSingleFilter` - Single filter parameter
-- `TestNullableFilters` - Nullable filter with nil-check
-- `TestMixedFilters` - Mix of required and nullable filters
-- `TestModelNotFound` - Error handling for non-existent model
-- `TestModelWithoutPK` - Models without primary keys still generate Insert/Query
-
-### Running Tests
-
+### 2. Omit Sensitive Columns
 ```bash
-go test ./rawgen -v
+rawgen -model User -omit "PasswordHash,RefreshToken" > queries/user.go
 ```
 
-### Test Data
+### 3. Add Compile-Time Filters
+```bash
+rawgen -model User -filter "Age:>:int,Status:=:string" > queries/user.go
+```
+*Generates a zero-allocation, compile-time static query:*
+```go
+func QueryUsers(ctx context.Context, db DBTX, age int, status string) ([]*models.User, error) {
+    const query = `SELECT id, name, age, status FROM users WHERE age > $1 AND status = $2`
+    rows, err := db.QueryContext(ctx, query, age, status)
+    // ...
+}
+```
 
-Tests use a consistent test metadata structure with sample models:
-- `User` (int PK) - User model with roles and tags
-- `Role` (int64 PK) - Simple role model
-- `Issue` (int64 PK) - Simple issue model
-- `Order` - Tests PostgreSQL reserved keywords
+### 4. Add Nullable / Dynamic Filters
+```bash
+rawgen -model User -nullable-filter "Age:>:int,Status:=:string" > queries/user.go
+```
+*Generates an optimized dynamic query builder using `strings.Builder.Grow` (only applied when pointers are non-nil):*
+```go
+func QueryUsers(ctx context.Context, db DBTX, age *int, status *string) ([]*models.User, error)
+```
 
-## Implementation Details
+### 5. Custom Table Name & Preallocated Result Slice
+```bash
+rawgen -model User -table "accounts" -rows 50 > queries/user.go
+```
 
-### Helper Functions
+---
 
-#### `findStruct(meta []parser.StructMeta, name string) (*parser.StructMeta, error)`
-Locates a struct in parsed metadata by name.
+## Programmatic Go Usage
 
-#### `receiverIdent(name string) string`
-Generates a single-character receiver identifier from model name (e.g., "User" → "u").
+You can embed `rawgen` in your code generation scripts:
 
-#### `formatIdent(ident string) string`
-Quotes SQL identifiers if they are reserved keywords or contain invalid characters.
+```go
+package main
 
-#### `resolveColumns(st *parser.StructMeta, opts Options) []column`
-Builds column metadata list, filtering by SelectFields/OmitFields/relations.
+import (
+    "os"
+    "github.com/abiiranathan/apigen/parser"
+    "github.com/abiiranathan/apigen/rawgen"
+)
 
-#### `findPK(cols []column) *column`
-Returns pointer to primary key column or nil.
+func main() {
+    // 1. Write the shared DBTX interface once
+    dbtxFile, _ := os.Create("queries/dbtx.go")
+    defer dbtxFile.Close()
+    _ = rawgen.WriteDBTX(dbtxFile)
 
-#### `writeCode(w io.Writer, d templateData) error`
-Orchestrates code generation by calling individual write functions.
+    // 2. Parse model metadata
+    meta := parser.Parse([]string{"github.com/example/app/models"})
 
-#### Code Writing Functions
-- `writeHeader()` - Package declaration and imports
-- `writeInsert()` - Insert function
-- `writeGet()` - Get by PK function
-- `writeQuery()` - Query with filters function
-- `writeDelete()` - Delete by PK function
-- `writeUpdate()` - Update function
+    // 3. Generate raw SQL queries for the User model
+    userFile, _ := os.Create("queries/user.go")
+    defer userFile.Close()
 
-#### `columnList(cols []column) string`
-Formats column names into CSV for SELECT statements.
+    opts := rawgen.Options{
+        ModelName: "User",
+        ModelPkg:  "github.com/example/app/models",
+        Filters: []rawgen.Filter{
+            {Column: "Age", Op: ">", GoType: "int", Nullable: true},
+        },
+        EstimatedRows: 25,
+    }
 
-#### `scanFieldList(cols []column, ident string) string`
-Formats column references for row.Scan() arguments.
+    if err := rawgen.Generate(userFile, meta, opts); err != nil {
+        panic(err)
+    }
+}
+```
 
-#### `nonPKCols(cols []column) []column`
-Filters out primary key column.
+---
 
-## PostgreSQL Reserved Keywords
+## Using Generated Code in Your Application
 
-The package maintains a comprehensive map of PostgreSQL reserved keywords (`postgresReserved`). Identifiers matching any keyword are automatically quoted with double quotes.
+### Standard Pool Execution
+```go
+db, _ := sql.Open("pgx", dsn)
 
-**Examples:** all, analyze, and, any, array, as, asc, false, foreign, from, group, order, select, table, true, user, where, with
+// Insert record
+user := &models.User{Name: "Alice", Age: 30}
+if err := queries.InsertUser(ctx, db, user); err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Inserted user with ID:", user.ID)
 
-## Error Handling
+// Fetch by primary key
+found, err := queries.GetUser(ctx, db, user.ID)
+```
 
-The Generate function returns errors in these cases:
+### Atomic Transactions
+Because all generated functions take `queries.DBTX`, transactions use the exact same functions:
 
-1. **Empty ModelName** - `"rawgen: Options.ModelName must not be empty"`
-2. **Model Not Found** - `"rawgen: model "X" not found in parsed structs"`
-3. **No Columns After Filtering** - `"rawgen: model "X" has no columns after applying SelectFields/OmitFields"`
-4. **Write Error** - `"rawgen: failed to write generated code: [underlying error]"`
+```go
+tx, _ := db.BeginTx(ctx, nil)
+defer tx.Rollback()
 
-## Notes for Users
+// Pass the transaction handle `tx` directly
+if err := queries.InsertUser(ctx, tx, user); err != nil {
+    return err
+}
 
-- **Import Paths** - Generated code always imports the specified ModelPkg; ensure it's the correct import path
-- **Receiver Names** - Single-letter receivers follow Go conventions (u for User, r for Role, etc.)
-- **Context Usage** - All generated functions accept context for timeouts and cancellation
-- **SQL Escaping** - Use parameterized queries with `$N` placeholders; never interpolate user input
-- **Error Types** - Functions return `sql.ErrNoRows` when records not found via Get/Delete/Update
-- **Relation Handling** - Foreign key fields (marked with Preload) are automatically excluded; retrieve relations separately
-- **Package Name** - Generated code always uses `queries` as the package name
+if err := queries.UpdateUser(ctx, tx, user); err != nil {
+    return err
+}
 
-## Dependencies
+return tx.Commit()
+```
 
-- `"fmt"` - String formatting
-- `"io"` - Writer interface
-- `"slices"` - Go 1.22+ slice utilities
-- `"strings"` - String manipulation
-- `"unicode"`, `"unicode/utf8"` - Character analysis
-- `"github.com/abiiranathan/apigen/parser"` - Struct metadata
-- `"github.com/iancoleman/strcase"` - Case conversion
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
