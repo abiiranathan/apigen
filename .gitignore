@@ -4,8 +4,6 @@
 *.sqlite3
 services
 handlers
-cmdapigen/apigen.toml
-apigen
 api.http
 enums.sql
 preload.json
