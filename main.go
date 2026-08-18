@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/abiiranathan/apigen/config"
 	"github.com/abiiranathan/apigen/parser"
@@ -36,16 +37,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse flags
 	subcmd, err := cli.Parse(os.Args)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// If a subcommand is found, execute it and exit
 	if subcmd != nil {
-		err := subcmd.Handler(nil)
-		if err != nil {
+		if err := subcmd.Handler(nil); err != nil {
 			log.Fatalf("error executing subcommand: %v\n", err)
 		}
 		os.Exit(0)
@@ -53,43 +51,58 @@ func main() {
 }
 
 func generateCode(any) error {
-	// Load configuration file
 	cfg, err := config.LoadConfig(configName)
 	if err != nil {
-		return fmt.Errorf("error loading config file: %v", err)
+		return fmt.Errorf("error loading config file: %w", err)
 	}
 
-	// If tsTypesPath is not empty generate the types
-	if tsTypesPath != "" {
-		f, err := os.OpenFile(tsTypesPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
-		if err != nil {
-			return fmt.Errorf("error opening typescript types file: %v", err)
-		}
-
-		meta := parser.Parse(cfg.Models.Pkgs)
-		mapMeta := parser.Map(meta)
-		typescript.GenerateTypescriptInterfaces(f, mapMeta, cfg.Overrides)
-	}
-
-	metadata := parser.Parse(cfg.Models.Pkgs)
-	err = parser.GenerateGORMServices(cfg, metadata)
+	// Single parse pass for all downstream generators
+	metadata, err := parser.Parse(cfg.Models.Pkgs)
 	if err != nil {
-		return fmt.Errorf("error generating code: %v", err)
+		return fmt.Errorf("parse error: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
+
+	// Concurrently generate TypeScript definitions and Go services
+	if tsTypesPath != "" {
+		wg.Go(func() {
+			f, err := os.OpenFile(tsTypesPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
+			if err != nil {
+				errCh <- fmt.Errorf("error opening typescript types file: %w", err)
+				return
+			}
+			defer f.Close()
+
+			mapMeta := parser.Map(metadata)
+			typescript.GenerateTypescriptInterfaces(f, mapMeta, cfg.Overrides)
+		})
+	}
+
+	wg.Go(func() {
+		if err := parser.GenerateGORMServices(cfg, metadata); err != nil {
+			errCh <- fmt.Errorf("error generating go services: %w", err)
+		}
+	})
+
+	wg.Wait()
+	close(errCh)
+
+	if err, ok := <-errCh; ok {
+		return err
 	}
 	return nil
 }
 
 func initConfigFile(any) error {
-	// If config file already exists, print message and return
 	if _, err := os.Stat(configName); err == nil {
 		fmt.Printf("config file already exists: %s\n", configName)
 		return nil
 	}
 
-	// Write default text to config
-	err := os.WriteFile(configName, defaultConfig, 0644)
-	if err != nil {
-		return fmt.Errorf("error creating config file: %v", err)
+	if err := os.WriteFile(configName, defaultConfig, 0644); err != nil {
+		return fmt.Errorf("error creating config file: %w", err)
 	}
 	return nil
 }

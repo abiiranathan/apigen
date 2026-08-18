@@ -37,32 +37,31 @@ OutputJson = true
 # RefetchAfterWrite = false
 
 [Models]
-# ModelPkg is the package name for the models to look for struct definitions
-Pkgs = [
-  'github.com/abiiranathan/apigen/models',
-]
+  # ModelPkg is the package name for the models to look for struct definitions
+  Pkgs = [
+    'github.com/abiiranathan/apigen/models',
+  ]
 
-# Skip is a list of models to skip. Names are case sensitive
-Skip = []
+  # Skip is a list of models to skip. Names are case sensitive
+  Skip = []
 
-# ReadOnly is a list of models that should not be generated with CRUD operations
-# Only Get methods will be generated for these models.
-ReadOnly = []
+  # ReadOnly is a list of models that should not be generated with CRUD operations
+  # Only Get methods will be generated for these models.
+  ReadOnly = []
 
 [Output]
+    # OutDir is the directory to write the generated files to
+    OutDir = 'gen'
 
-# OutDir is the directory to write the generated files to
-OutDir = 'gen'
-
-# ServiceName is the name of the service to generate
-ServiceName = 'services'
+    # ServiceName is the name of the service to generate
+    ServiceName = 'services'
 
 [overrides]
-# Overrides for types and fields. Forexample, here we are overriding the type
-# as would appear in typescript for Sex to be an enum.
-[overrides.types]
-Sex = '"Male" | "Female"'
+  # Overrides for types and fields. Forexample, here we are overriding the type
+  # as would appear in typescript for Sex to be an enum.
+  [overrides.types]
+  Sex = '"Male" | "Female"'
 
-# Here we are overriding gener to of type Sex. Sex is a go type.
-[overrides.fields]
-gender = 'Sex'
+  # Here we are overriding gener to of type Sex. Sex is a go type.
+  [overrides.fields]
+  gender = 'Sex'

@@ -2,11 +2,6 @@ package config
 
 import "testing"
 
-//go:fix inline
-func boolPtr(value bool) *bool {
-	return new(value)
-}
-
 func TestQueryConfigUsesGlobalDefaults(t *testing.T) {
 	cfg := &Config{
 		PreloadAll:  false,

@@ -42,6 +42,16 @@ func testMeta() []parser.StructMeta {
 				{Name: "Name", Type: "string", BaseType: "string", Parent: "Issue"},
 			},
 		},
+		{
+			Name:    "Order", // Reserved word table & field test
+			PKType:  "int64",
+			Package: "github.com/abiiranathan/apigen/models",
+			Fields: []parser.Field{
+				{Name: "ID", Type: "int64", BaseType: "int64", Parent: "Order"},
+				{Name: "User", Type: "string", BaseType: "string", Parent: "Order"}, // "user" reserved word
+				{Name: "Amount", Type: "float64", BaseType: "float64", Parent: "Order"},
+			},
+		},
 	}
 }
 
@@ -81,10 +91,7 @@ func TestBasicGeneration(t *testing.T) {
 	hasNot(t, out, `"strings"`)
 
 	has(t, out, "func InsertUser(ctx context.Context, db *sql.DB, u *models.User) error")
-	has(t, out, "INSERT INTO users")
-	has(t, out, "name, age, discount, role_id")
-	has(t, out, "$1, $2, $3, $4")
-	has(t, out, "RETURNING id")
+	has(t, out, "INSERT INTO users (name, age, discount, role_id) VALUES ($1, $2, $3, $4) RETURNING id")
 	has(t, out, ".Scan(&u.ID)")
 
 	has(t, out, "func GetUser(ctx context.Context, db *sql.DB, id int) (*models.User, error)")
@@ -177,6 +184,18 @@ func TestCustomTableName(t *testing.T) {
 	hasNot(t, out, "FROM users")
 }
 
+func TestReservedKeywordsAreQuoted(t *testing.T) {
+	out := gen(t, Options{
+		ModelName: "Order",
+		ModelPkg:  "github.com/abiiranathan/apigen/models",
+	})
+
+	// "user" is a PostgreSQL reserved keyword; amount is not.
+	has(t, out, `INSERT INTO orders ("user", amount) VALUES ($1, $2) RETURNING id`)
+	has(t, out, `SELECT id, "user", amount FROM orders WHERE id = $1`)
+	has(t, out, `UPDATE orders SET "user" = $1, amount = $2 WHERE id = $3`)
+}
+
 func TestRequiredFilters(t *testing.T) {
 	out := gen(t, Options{
 		ModelName: "User",
@@ -221,6 +240,7 @@ func TestNullableFilters(t *testing.T) {
 	has(t, out, "age *int")
 	has(t, out, "if age != nil")
 	has(t, out, "*age")
+	has(t, out, `age > $%d`)
 }
 
 func TestMixedFilters(t *testing.T) {
@@ -237,6 +257,7 @@ func TestMixedFilters(t *testing.T) {
 	has(t, out, "age *int")
 	has(t, out, `name ILIKE $%d`)
 	has(t, out, "if age != nil")
+	has(t, out, `age > $%d`)
 }
 
 func TestModelNotFound(t *testing.T) {

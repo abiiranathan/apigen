@@ -63,7 +63,10 @@ func main() {
 		log.Fatalf("error loading config: %v\n", err)
 	}
 
-	meta := parser.Parse(cfg.Models.Pkgs)
+	meta, err := parser.Parse(cfg.Models.Pkgs)
+	if err != nil {
+		log.Fatalf("parse error: %v\n", err)
+	}
 
 	// Find the model's package
 	modelPkg := ""
