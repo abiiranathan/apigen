@@ -91,6 +91,5 @@ func initConfigFile(any) error {
 	if err != nil {
 		return fmt.Errorf("error creating config file: %v", err)
 	}
-	fmt.Printf("config file created: %s\n", configName)
 	return nil
 }

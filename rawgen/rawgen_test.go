@@ -109,7 +109,7 @@ func TestRelationFieldsExcluded(t *testing.T) {
 		ModelPkg:  "github.com/abiiranathan/apigen/models",
 	})
 
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		lower := strings.ToLower(line)
 		if strings.Contains(lower, "select") || strings.Contains(lower, "insert") || strings.Contains(lower, "update") {
 			if strings.Contains(lower, ", role,") || strings.Contains(lower, ", tags") {

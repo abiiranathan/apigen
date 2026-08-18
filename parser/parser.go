@@ -9,7 +9,6 @@ import (
 	"go/ast"
 	"go/format"
 	"io"
-	"log"
 	"slices"
 	"strconv"
 	"strings"
@@ -125,7 +124,7 @@ func Parse(modelPkgs []string) []StructMeta {
 							for _, comment := range t.Doc.List {
 								if strings.Contains(comment.Text, skipTag) {
 									meta.Skip = true
-									log.Println("Skipping struct:", meta.Name)
+									// log.Println("Skipping struct:", meta.Name)
 									break
 								}
 							}

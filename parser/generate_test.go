@@ -7,10 +7,6 @@ import (
 	"github.com/abiiranathan/apigen/config"
 )
 
-func boolPtr(value bool) *bool {
-	return &value
-}
-
 func TestGenerateGORMServicesUsesPerQueryConfig(t *testing.T) {
 	cfg := &config.Config{
 		PreloadAll:   true,
@@ -32,12 +28,12 @@ func TestGenerateGORMServicesUsesPerQueryConfig(t *testing.T) {
 		},
 		Queries: config.Queries{
 			Default: config.QuerySet{
-				GetAll: config.QuerySettings{PreloadAll: boolPtr(false)},
+				GetAll: config.QuerySettings{PreloadAll: new(false)},
 			},
 			Models: map[string]config.QuerySet{
 				"User": {
-					Get:    config.QuerySettings{PreloadAll: boolPtr(true)},
-					Create: config.QuerySettings{RefetchAfterWrite: boolPtr(false)},
+					Get:    config.QuerySettings{PreloadAll: new(true)},
+					Create: config.QuerySettings{RefetchAfterWrite: new(false)},
 				},
 			},
 		},

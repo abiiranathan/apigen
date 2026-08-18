@@ -80,8 +80,6 @@ func GetPreloadMap(structs []StructMeta, cfg *config.Config) map[string][]string
 		outpath := "preload.json"
 		if err := writeJSONToFile(outpath, preloads); err != nil {
 			fmt.Printf("Error writing to JSON file: %v\n", err)
-		} else {
-			fmt.Printf("Preload JSON file created at %s\n", outpath)
 		}
 	}
 	return preloads

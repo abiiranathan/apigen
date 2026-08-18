@@ -2,8 +2,9 @@ package config
 
 import "testing"
 
+//go:fix inline
 func boolPtr(value bool) *bool {
-	return &value
+	return new(value)
 }
 
 func TestQueryConfigUsesGlobalDefaults(t *testing.T) {
@@ -26,13 +27,13 @@ func TestQueryConfigAppliesDefaultAndModelOverrides(t *testing.T) {
 		PreloadAll: false,
 		Queries: Queries{
 			Default: QuerySet{
-				GetAll: QuerySettings{PreloadAll: boolPtr(true)},
-				Create: QuerySettings{RefetchAfterWrite: boolPtr(true)},
+				GetAll: QuerySettings{PreloadAll: new(true)},
+				Create: QuerySettings{RefetchAfterWrite: new(true)},
 			},
 			Models: map[string]QuerySet{
 				"User": {
-					GetAll: QuerySettings{PreloadAll: boolPtr(false)},
-					Create: QuerySettings{RefetchAfterWrite: boolPtr(false)},
+					GetAll: QuerySettings{PreloadAll: new(false)},
+					Create: QuerySettings{RefetchAfterWrite: new(false)},
 				},
 			},
 		},
