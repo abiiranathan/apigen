@@ -1,6 +1,6 @@
 # apigen
 
-`apigen` is a tool written in Go that parses Go structs and generates code for querying the database based on [GORM](https://gorm.io) ORM. It also includes `rawgen`, a companion tool that generates raw `database/sql` PostgreSQL code for when you need low-level control and maximum performance.
+`apigen` is a tool written in Go that parses Go structs and generates code for querying the database based on [GORM](https://gorm.io) ORM. It also includes an `sql` subcommand that generates raw `database/sql` PostgreSQL code for when you need low-level control and maximum performance.
 
 ## Features
 
@@ -9,7 +9,7 @@
 - Optionally preloads all relationships (even nested relationships) by default. Because the parser knows foreign keys and the tree, we are able to do that for all `foreignKey` and `many2many` fields
 - Allows for customizing all queries by specifying optional Where, ordering, grouping, select `options ...services.Options`. These options are passed to the callable handlers that are designed with the decorator pattern
 - Generates typescript interfaces for your models
-- **`rawgen`** — generates raw PostgreSQL Go functions (`database/sql`) for Insert, Get, Delete, Update, and Query with full control over selected fields, omitted fields, custom filters, and table names
+- **`apigen sql`** — generates raw PostgreSQL Go functions (`database/sql`) for Insert, Get, Delete, Update, and Query with full control over selected fields, omitted fields, custom filters, and table names
 
 ## Performance Tuning
 
@@ -84,13 +84,7 @@ row, err := services.RawQueryRow[MyStruct](db, "SELECT * FROM users WHERE id = $
 ### apigen CLI
 
 ```console
-go install github.com/abiiranathan/apigen@latest
-```
-
-### rawgen CLI (separate binary)
-
-```console
-go install github.com/abiiranathan/apigen/cmd/rawgen@latest
+go install github.com/abiiranathan/apigen/cmd/apigen@latest
 ```
 
 ### As a library
@@ -227,29 +221,16 @@ func main() {
 }
 ```
 
-## rawgen — Raw PostgreSQL Code Generator
+## apigen sql — Raw PostgreSQL Code Generator
 
-`rawgen` generates type-safe `database/sql` Go functions for a given model. It reads your `apigen.toml` to find model packages and outputs Go code to stdout. Use it when you need low-level control over SQL without GORM overhead.
-
-### Install
-
-```bash
-go install github.com/abiiranathan/apigen/cmd/rawgen@latest
-```
+`apigen sql` generates type-safe `database/sql` Go functions for a given model. It reads your `apigen.toml` to find model packages and outputs Go code to stdout. Use it when you need low-level control over SQL without GORM overhead.
 
 ### Usage
 
 ```
-rawgen [flags]
+apigen sql [flags]
 
-Flags:
-  -config string          Path to apigen.toml (default "apigen.toml")
-  -model string           Model struct name (required, e.g. "User")
-  -table string           Override table name (default: snake_case plural of model)
-  -select string          Comma-separated field names to include (default: all)
-  -omit string            Comma-separated field names to exclude
-  -filter string          Custom filters as "Column:Op:GoType" (comma-separated)
-  -nullable-filter string Same as -filter but wraps in nil check (pointer param)
+# Run apigen sql -h for more information.
 ```
 
 ### Examples
@@ -257,7 +238,7 @@ Flags:
 **Basic — all fields, no filters:**
 
 ```bash
-go run ./cmd/rawgen -model User > queries/user.go
+apigen sql -model User > queries/user.go
 ```
 
 Generated output:
@@ -273,7 +254,7 @@ func DeleteUser(ctx context.Context, db *sql.DB, id int) error { ... }
 **Select specific fields:**
 
 ```bash
-go run ./cmd/rawgen -model User -select "ID,Name,Age"
+apigen sql -model User -select "ID,Name,Age"
 ```
 
 Only `id`, `name`, `age` columns appear in all generated SQL — no `discount`, no `role_id`.
@@ -281,7 +262,7 @@ Only `id`, `name`, `age` columns appear in all generated SQL — no `discount`, 
 **Omit fields:**
 
 ```bash
-go run ./cmd/rawgen -model User -omit "Discount"
+apigen sql -model User -omit "Discount"
 ```
 
 All columns except `discount` are included.
@@ -289,7 +270,7 @@ All columns except `discount` are included.
 **With required filters (typed function params):**
 
 ```bash
-go run ./cmd/rawgen -model User -filter "Age:>:int,Name:ILIKE:string"
+apigen sql -model User -filter "Age:>:int,Name:ILIKE:string"
 ```
 
 Generates `QueryUsers` with typed parameters that build a dynamic WHERE clause:
@@ -303,7 +284,7 @@ func QueryUsers(ctx context.Context, db *sql.DB, age int, name string) ([]*model
 **With optional/nullable filters (pointer params, nil-checked):**
 
 ```bash
-go run ./cmd/rawgen -model User -nullable-filter "Age:>:int"
+apigen sql -model User -nullable-filter "Age:>:int"
 ```
 
 Generates `QueryUsers` with pointer parameters — filters are only applied when non-nil:
@@ -317,7 +298,7 @@ func QueryUsers(ctx context.Context, db *sql.DB, age *int) ([]*models.User, erro
 **Custom table name:**
 
 ```bash
-go run ./cmd/rawgen -model User -table my_users
+apigen sql -model User -table my_users
 ```
 
 All generated SQL uses `my_users` instead of the default `users`.
@@ -325,5 +306,5 @@ All generated SQL uses `my_users` instead of the default `users`.
 **Pipe to a file and format:**
 
 ```bash
-go run ./cmd/rawgen -model User -filter "Age:>:int" > queries/user.go && gofmt -w queries/user.go
+apigen sql -model User -filter "Age:>:int" > queries/user.go && gofmt -w queries/user.go
 ```
