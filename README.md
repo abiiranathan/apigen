@@ -225,6 +225,21 @@ func main() {
 
 `apigen sql` generates type-safe `database/sql` Go functions for a given model. It reads your `apigen.toml` to find model packages and outputs Go code to stdout. Use it when you need low-level control over SQL without GORM overhead.
 
+Generated functions use the `DBTX` interface, which accepts both `*sql.DB` and `*sql.Tx`, allowing seamless integration with transactions:
+
+```go
+var db *sql.DB      // works
+var tx *sql.Tx      // also works
+var txErr error
+if txErr != nil {
+    tx, _ := db.BeginTx(ctx, nil)
+    defer tx.Rollback()
+}
+// All generated functions accept the same db parameter
+err := queries.InsertUser(ctx, db, user)    // with connection pool
+err := queries.InsertUser(ctx, tx, user)    // inside transaction
+```
+
 ### Usage
 
 ```
@@ -244,11 +259,21 @@ apigen sql -model User > queries/user.go
 Generated output:
 
 ```go
-func InsertUser(ctx context.Context, db *sql.DB, u *models.User) error { ... }
-func GetUser(ctx context.Context, db *sql.DB, id int) (*models.User, error) { ... }
-func QueryUsers(ctx context.Context, db *sql.DB) ([]*models.User, error) { ... }
-func UpdateUser(ctx context.Context, db *sql.DB, u *models.User) error { ... }
-func DeleteUser(ctx context.Context, db *sql.DB, id int) error { ... }
+func InsertUser(ctx context.Context, db DBTX, u *models.User) error { ... }
+func GetUser(ctx context.Context, db DBTX, id int) (*models.User, error) { ... }
+func QueryUsers(ctx context.Context, db DBTX) ([]*models.User, error) { ... }
+func UpdateUser(ctx context.Context, db DBTX, u *models.User) error { ... }
+func DeleteUser(ctx context.Context, db DBTX, id int) error { ... }
+```
+
+The `DBTX` interface is defined in `dbtx.go` and includes:
+
+```go
+type DBTX interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
 ```
 
 **Select specific fields:**
@@ -276,7 +301,7 @@ apigen sql -model User -filter "Age:>:int,Name:ILIKE:string"
 Generates `QueryUsers` with typed parameters that build a dynamic WHERE clause:
 
 ```go
-func QueryUsers(ctx context.Context, db *sql.DB, age int, name string) ([]*models.User, error) {
+func QueryUsers(ctx context.Context, db DBTX, age int, name string) ([]*models.User, error) {
     // ... WHERE age > $1 AND name ILIKE $2
 }
 ```
@@ -284,13 +309,13 @@ func QueryUsers(ctx context.Context, db *sql.DB, age int, name string) ([]*model
 **With optional/nullable filters (pointer params, nil-checked):**
 
 ```bash
-apigen sql -model User -nullable-filter "Age:>:int"
+apigen sql -model User -nullable "Age:>:int"
 ```
 
 Generates `QueryUsers` with pointer parameters — filters are only applied when non-nil:
 
 ```go
-func QueryUsers(ctx context.Context, db *sql.DB, age *int) ([]*models.User, error) {
+func QueryUsers(ctx context.Context, db DBTX, age *int) ([]*models.User, error) {
     // if age != nil { ... WHERE age > $1 }
 }
 ```
@@ -308,3 +333,34 @@ All generated SQL uses `my_users` instead of the default `users`.
 ```bash
 apigen sql -model User -filter "Age:>:int" > queries/user.go && gofmt -w queries/user.go
 ```
+
+**Generate queries for all models:**
+
+```bash
+apigen sql --all -o queries/
+```
+
+Generates query files for all models in your `apigen.toml` and creates `dbtx.go` in the output directory.
+
+**Generate only the DBTX interface (once per package):**
+
+```bash
+apigen sql --dbtx -o queries/
+```
+
+Generates `dbtx.go` containing the `DBTX` interface definition. This is typically generated once and included with other query files.
+
+### Generated Query Functions
+
+Each model generates five main functions:
+
+- **Insert** — Inserts a new record and returns the generated ID
+- **Get** — Retrieves a single record by primary key
+- **Query** — Retrieves multiple records with optional filters
+- **Update** — Updates all columns of a record
+- **Delete** — Deletes a record by primary key
+
+All functions accept a `DBTX` parameter for maximum flexibility:
+- Use `*sql.DB` for regular queries
+- Use `*sql.Tx` for transaction support
+- Custom implementations are welcome as long as they satisfy the interface

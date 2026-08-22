@@ -90,21 +90,21 @@ func TestBasicGeneration(t *testing.T) {
 	has(t, out, `"github.com/abiiranathan/apigen/models"`)
 	hasNot(t, out, `"strings"`)
 
-	has(t, out, "func InsertUser(ctx context.Context, db *sql.DB, u *models.User) error")
+	has(t, out, "func InsertUser(ctx context.Context, db DBTX, u *models.User) error")
 	has(t, out, "INSERT INTO users (name, age, discount, role_id) VALUES ($1, $2, $3, $4) RETURNING id")
 	has(t, out, ".Scan(&u.ID)")
 
-	has(t, out, "func GetUser(ctx context.Context, db *sql.DB, id int) (*models.User, error)")
+	has(t, out, "func GetUser(ctx context.Context, db DBTX, id int) (*models.User, error)")
 	has(t, out, "SELECT id, name, age, discount, role_id FROM users WHERE id = $1")
 
-	has(t, out, "func DeleteUser(ctx context.Context, db *sql.DB, id int) error")
+	has(t, out, "func DeleteUser(ctx context.Context, db DBTX, id int) error")
 	has(t, out, "DELETE FROM users WHERE id = $1")
 	has(t, out, "sql.ErrNoRows")
 
-	has(t, out, "func UpdateUser(ctx context.Context, db *sql.DB, u *models.User) error")
+	has(t, out, "func UpdateUser(ctx context.Context, db DBTX, u *models.User) error")
 	has(t, out, "UPDATE users SET name = $1, age = $2, discount = $3, role_id = $4 WHERE id = $5")
 
-	has(t, out, "func QueryUsers(ctx context.Context, db *sql.DB) ([]*models.User, error)")
+	has(t, out, "func QueryUsers(ctx context.Context, db DBTX) ([]*models.User, error)")
 	has(t, out, "SELECT id, name, age, discount, role_id FROM users")
 	has(t, out, "rows.Close()")
 	has(t, out, "rows.Err()")
@@ -208,7 +208,7 @@ func TestRequiredFilters(t *testing.T) {
 
 	has(t, out, `"strings"`)
 	has(t, out, `"fmt"`)
-	has(t, out, "func QueryUsers(ctx context.Context, db *sql.DB, age int, name string)")
+	has(t, out, "func QueryUsers(ctx context.Context, db DBTX, age int, name string)")
 	has(t, out, `age > $%d`)
 	has(t, out, `name ILIKE $%d`)
 	has(t, out, `strings.Join(conditions, " AND ")`)
@@ -224,7 +224,7 @@ func TestSingleFilter(t *testing.T) {
 		},
 	})
 
-	has(t, out, "func QueryUsers(ctx context.Context, db *sql.DB, age int)")
+	has(t, out, "func QueryUsers(ctx context.Context, db DBTX, age int)")
 	has(t, out, `age = $%d`)
 }
 

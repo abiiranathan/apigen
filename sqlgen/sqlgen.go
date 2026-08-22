@@ -258,9 +258,12 @@ func writeHeader(b *strings.Builder, d templateData) {
 	fmt.Fprintf(b, "import (\n")
 	fmt.Fprintf(b, "\t\"context\"\n")
 	fmt.Fprintf(b, "\t\"database/sql\"\n")
+	if len(d.Filters) > 0 {
+		fmt.Fprintf(b, "\t\"fmt\"\n")
+		fmt.Fprintf(b, "\t\"strings\"\n")
+	}
 	if d.hasNullableFilters() {
 		fmt.Fprintf(b, "\t\"strconv\"\n")
-		fmt.Fprintf(b, "\t\"strings\"\n")
 	}
 	fmt.Fprintf(b, "\n\t%q\n", d.ModelPkg)
 	fmt.Fprintf(b, ")\n\n")
@@ -284,6 +287,7 @@ func writeInsert(b *strings.Builder, d templateData) {
 	} else {
 		fmt.Fprintf(b, ".\n")
 	}
+
 	fmt.Fprintf(b, "func Insert%s(ctx context.Context, db DBTX, %s *%s.%s) error {\n",
 		d.ModelName, d.Ident, d.ModelPkgName, d.ModelName)
 	fmt.Fprintf(b, "\tconst query = `INSERT INTO %s (%s) VALUES (%s)",
@@ -353,30 +357,25 @@ func writeQuery(b *strings.Builder, d templateData) {
 		fmt.Fprintf(b, "\tconst query = `SELECT %s FROM %s`\n", colList, d.TableName)
 		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, query)\n")
 
-		// CASE B: All Required Filters -> 100% Compile-time constant (Zero Runtime Allocations)
+		// CASE B: All Required Filters -> Dynamic query construction with fmt.Sprintf and strings.Join
 	} else if d.allFiltersRequired() {
-		whereClauses := make([]string, len(d.Filters))
-		args := make([]string, len(d.Filters))
-		for i, f := range d.Filters {
-			colName := formatIdent(strcase.ToSnake(f.Column))
+		fmt.Fprintf(b, "\tvar args []any\n")
+		fmt.Fprintf(b, "\tvar conditions []string\n")
+		for _, f := range d.Filters {
 			paramName := strcase.ToLowerCamel(f.Column)
-			whereClauses[i] = fmt.Sprintf("%s %s $%d", colName, f.Op, i+1)
-			args[i] = paramName
+			colName := formatIdent(strcase.ToSnake(f.Column))
+			fmt.Fprintf(b, "\tconditions = append(conditions, fmt.Sprintf(\"%s %s $%%d\", len(args)+1))\n", colName, f.Op)
+			fmt.Fprintf(b, "\targs = append(args, %s)\n", paramName)
 		}
+		fmt.Fprintf(b, "\tquery := fmt.Sprintf(\"SELECT %s FROM %s WHERE %%s\", strings.Join(conditions, \" AND \"))\n",
+			colList, d.TableName)
+		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, query, args...)\n")
 
-		fmt.Fprintf(b, "\tconst query = `SELECT %s FROM %s WHERE %s`\n",
-			colList, d.TableName, strings.Join(whereClauses, " AND "))
-		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, query, %s)\n", strings.Join(args, ", "))
-
-		// CASE C: Nullable / Dynamic Filters -> Pre-allocated strings.Builder
+		// CASE C: Nullable / Dynamic Filters -> Dynamic query building with fmt.Sprintf
 	} else {
-		fmt.Fprintf(b, "\tconst baseQuery = `SELECT %s FROM %s`\n", colList, d.TableName)
-		fmt.Fprintf(b, "\tvar query strings.Builder\n")
-		fmt.Fprintf(b, "\tquery.Grow(len(baseQuery) + %d)\n", len(d.Filters)*32)
-		fmt.Fprintf(b, "\tquery.WriteString(baseQuery)\n\n")
-
-		fmt.Fprintf(b, "\targs := make([]any, 0, %d)\n", len(d.Filters))
-		fmt.Fprintf(b, "\thasWhere := false\n\n")
+		fmt.Fprintf(b, "\tvar args []any\n")
+		fmt.Fprintf(b, "\tvar conditions []string\n")
+		fmt.Fprintf(b, "\tvar hasWhere bool\n\n")
 
 		for _, f := range d.Filters {
 			paramName := strcase.ToLowerCamel(f.Column)
@@ -384,20 +383,21 @@ func writeQuery(b *strings.Builder, d templateData) {
 
 			if f.Nullable {
 				fmt.Fprintf(b, "\tif %s != nil {\n", paramName)
-				fmt.Fprintf(b, "\t\tif !hasWhere {\n\t\t\tquery.WriteString(\" WHERE \")\n\t\t\thasWhere = true\n\t\t} else {\n\t\t\tquery.WriteString(\" AND \")\n\t\t}\n")
-				fmt.Fprintf(b, "\t\tquery.WriteString(\"%s %s $\")\n", colName, f.Op)
-				fmt.Fprintf(b, "\t\tquery.WriteString(strconv.Itoa(len(args) + 1))\n")
+				fmt.Fprintf(b, "\t\tconditions = append(conditions, fmt.Sprintf(\"%s %s $%%d\", len(args)+1))\n", colName, f.Op)
 				fmt.Fprintf(b, "\t\targs = append(args, *%s)\n", paramName)
 				fmt.Fprintf(b, "\t}\n")
 			} else {
-				fmt.Fprintf(b, "\tif !hasWhere {\n\t\tquery.WriteString(\" WHERE \")\n\t\thasWhere = true\n\t} else {\n\t\tquery.WriteString(\" AND \")\n\t}\n")
-				fmt.Fprintf(b, "\tquery.WriteString(\"%s %s $\")\n", colName, f.Op)
-				fmt.Fprintf(b, "\tquery.WriteString(strconv.Itoa(len(args) + 1))\n")
+				fmt.Fprintf(b, "\tconditions = append(conditions, fmt.Sprintf(\"%s %s $%%d\", len(args)+1))\n", colName, f.Op)
 				fmt.Fprintf(b, "\targs = append(args, %s)\n", paramName)
 			}
 		}
 
-		fmt.Fprintf(b, "\n\trows, err := db.QueryContext(ctx, query.String(), args...)\n")
+		fmt.Fprintf(b, "\tif len(conditions) == 0 {\n")
+		fmt.Fprintf(b, "\t\treturn nil, fmt.Errorf(\"at least one filter condition is required\")\n")
+		fmt.Fprintf(b, "\t}\n")
+		fmt.Fprintf(b, "\tquery := fmt.Sprintf(\"SELECT %s FROM %s WHERE %%s\", strings.Join(conditions, \" AND \"))\n",
+			colList, d.TableName)
+		fmt.Fprintf(b, "\trows, err := db.QueryContext(ctx, query, args...)\n")
 	}
 
 	fmt.Fprintf(b, "\tif err != nil {\n")
