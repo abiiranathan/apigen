@@ -9,7 +9,7 @@ PreloadAll = false
 PreloadDepth = 3
 
 # Output preload.json
-OutputJson = true
+OutputJson = false
 
 # LazyPreload when true, sets preloadAll=false by default in generated services.
 # Preloads are only applied when the caller explicitly opts in via .PreloadAll(true) or Preload() option.
