@@ -59,6 +59,7 @@ func GetPreloadMap(structs []StructMeta, cfg *config.Config) map[string][]string
 
 	for _, st := range structs {
 		raw := collectPreloads(st.Name, structMap, maxDepth, memo)
+
 		// Clone and deduplicate so memoized entries remain intact
 		copied := make([]string, len(raw))
 		copy(copied, raw)
@@ -91,37 +92,42 @@ func collectPreloads(
 	}
 
 	var results []string
+
+	// a slice is okay for small N.
 	visited := []string{rootName}
 
 	var dfs func(curr *StructMeta, prefix string, depth int)
 	dfs = func(curr *StructMeta, prefix string, depth int) {
-		for _, f := range curr.Fields {
-			if !f.Preload {
+		// Loop through all struct fields and build a preload array.
+		for _, field := range curr.Fields {
+			if !field.Preload {
 				continue
 			}
 
-			fullPath := f.Name
+			fullPath := field.Name
 			if prefix != "" {
-				fullPath = prefix + "." + f.Name
+				fullPath = prefix + "." + field.Name
 			}
 			results = append(results, fullPath)
 
+			// Honor callers configured [maxDepth].
 			if depth >= maxDepth {
 				continue
 			}
 
-			nested, exists := structMap[f.BaseType]
+			nested, exists := structMap[field.BaseType]
 			if !exists {
 				continue
 			}
 
 			// Prevent cyclic recursion
-			if slices.Contains(visited, f.BaseType) {
+			if slices.Contains(visited, field.BaseType) {
 				continue
 			}
 
-			visited = append(visited, f.BaseType)
+			visited = append(visited, field.BaseType)
 			dfs(nested, fullPath, depth+1)
+
 			visited = visited[:len(visited)-1] // Backtrack
 		}
 	}

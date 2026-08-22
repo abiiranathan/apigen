@@ -537,73 +537,56 @@ func RawQueryRow[T any](db *gorm.DB, sql string, args ...any) (*T, error) {
 {{ $ident:=.Model | ToLower }}
 {{ $pkType := .ModelObj.PKType }}
 
-{{ if not .SkipService }}
+{{- if not .SkipService -}}
+//  {{$ident}}Service is an interface that defines methods for queries the {{$ident}} struct.
 type {{$ident}}Service interface {
-	{{ if not .PkgReadOnly }}
+	{{- if not .PkgReadOnly -}}
 		// Create new {{$ident}}
 		Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options) error
-
 		// Create multiple {{$ident}}s
 		CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model}}, options ...*Options) error
-
-		{{ if ne $pkType "" }}
+		{{- if ne $pkType "" -}}
 			// Update {{$ident}} with all the fields. Uses gorm.DB.Save()
 			Update({{$ident}}Id {{$pkType}}, {{$ident}} *{{.ModelPkgName}}.{{.Model}}, options ...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error)
-		{{ end }}
-
+		{{- end -}}
 		// Update a single column with specified conditions
 		UpdateColumn(columnName string, value any, query string, args ...any) error
-
-		{{ if ne $pkType "" }}
+		{{- if ne $pkType "" -}}
 			// PartialUpdate for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
 			PartialUpdate(id {{$pkType}}, {{$ident}} {{.ModelPkgName}}.{{.Model}}, options ...*Options)  (*{{.ModelPkgName}}.{{.Model}}, error)
-
 			// PartialUpdateWithMap for {{$ident}}. Only updates fields with non-zero values using gorm.DB.Updates(). Returns the updated {{$ident}}
 			PartialUpdateWithMap(id {{$pkType}}, data map[string]any, options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error)
 		{{ end }}
-
-		{{ if ne $pkType "" }}
+		{{- if ne $pkType "" -}}
 			// Permanently Delete {{$ident}} from the database by primary key
 			Delete(id {{$pkType}}) error
-		{{ end }}
-
+		{{- end -}}
 		// Permanently Delete {{$ident}} from the database matching conditions.
 		DeleteWhere(value string, conds ...any) error
-
 		// Begin returns a new instance of {{$ident}}Service that runs all queries in a transaction.
 		// Call Rollback() to undo changes and Commit() to Commit the changes.
 		Begin(opts ...*sql.TxOptions)({{$ident}}Service, error)
-
 		// Commit all transactions run with the service.
 		Commit() error
-
 		// Rollback transaction.
 		Rollback() error
 	{{ end }}
-
-	{{ if ne $pkType "" }}
+	{{- if ne $pkType "" -}}
 		// Get a single {{$ident}} by id (primary key)
 		Get(id {{$pkType}}, options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error)
-	{{ end }}
-
+	{{- end -}}
 	// Retrieves all {{$ident}}s from the database
 	GetAll(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error)
-
 	// Count returns the number of records matching the query
 	Count(options ...*Options) (int64, error)
-
 	// Find the first record matching condition specified by query & args
 	FindOne(options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error)
-
 	// Find all records matching condition specified by query & args
 	FindMany(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error)
-
 	// GetPaginated retrieves a paginated list of {{$ident}}s
 	GetPaginated(page int, pageSize int, options ...*Options) (*PaginatedResults[*{{.ModelPkgName}}.{{.Model}}], error)
-
 	// Override preload
 	PreloadAll(preload bool) {{$ident}}Service
-
 	// Preload overrides the default preloads
 	Preload(query string, args ...any) {{$ident}}Service
 }
@@ -611,12 +594,10 @@ type {{$ident}}Service interface {
 // Implementation for {{$ident}}Service interface
 type {{$ident}}Repo struct {
 	DB *gorm.DB
-
 	preloads []string
 	preloadAll bool
 	preloadConfigured bool
 }
-
 
 func (repo *{{$ident}}Repo) shouldPreload(defaultValue bool) bool {
 	if repo.preloadConfigured {
@@ -691,10 +672,8 @@ func (repo *{{$ident}}Repo) CreateMany({{$ident}}s *[]{{.ModelPkgName}}.{{.Model
 		for i, record := range *{{$ident}}s {
 			ids[i] = record.ID
 		}
-
 		db := repo.applyConfiguredPreloads(repo.DB, true)
 		db = applyOptions(db, options...)
-
 		var fetched []{{.ModelPkgName}}.{{.Model}}
 		if err := db.Where("id IN ?", ids).Find(&fetched).Error; err != nil {
 			return err
@@ -720,7 +699,6 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 	if err := repo.DB.Omit({{ join .OmitFields ","}}).Create({{$ident}}).Error; err != nil{
 		return err
 	}
-
 	{{ if .Queries.Create.RefetchAfterWrite }}
 	// Refetch to load associations if any
 	if repo.shouldPreload({{.Queries.Create.PreloadAll}}) && len(repo.preloads) > 0 {
@@ -731,7 +709,6 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 		*{{$ident}}=*tmpRecord
 	}
 	{{ end }}
-
 	return nil
 }
 
@@ -743,7 +720,6 @@ func (repo *{{$ident}}Repo) Create({{$ident}} *{{.ModelPkgName}}.{{.Model}}, opt
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Save({{$ident}}).Error; err != nil {
 			return nil, err
 		}
-
 		{{ if .Queries.Update.RefetchAfterWrite }}
 		if repo.shouldPreload({{.Queries.Update.PreloadAll}}) && len(repo.preloads) > 0 {
 			return repo.getByID(id, true, options...)
@@ -764,7 +740,6 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates({{$ident}}).Error; err != nil {
 			return nil, err
 		}
-
 		{{ if .Queries.PartialUpdate.RefetchAfterWrite }}
 		if repo.shouldPreload({{.Queries.PartialUpdate.PreloadAll}}) && len(repo.preloads) > 0 {
 			return repo.getByID(id, true, options...)
@@ -785,7 +760,6 @@ func (repo *{{$ident}}Repo) UpdateColumn(columnName string, value any, query str
 		if err := repo.DB.Omit({{ join .OmitFields ","}}).Where("id=?", id).Model(&{{.ModelPkgName}}.{{.Model}}{}).Updates(data).Error; err != nil {
 			return nil, err
 		}
-
 		{{ if .Queries.PartialUpdateWithMap.RefetchAfterWrite }}
 		if repo.shouldPreload({{.Queries.PartialUpdateWithMap.PreloadAll}}) && len(repo.preloads) > 0 {
 			return repo.getByID(id, true, options...)
@@ -840,7 +814,6 @@ func (repo *{{$ident}}Repo) Commit() error{
 func (repo *{{$ident}}Repo) Rollback() error{
 	return repo.DB.Rollback().Error
 }
-
 {{ end }}
 
 {{ if ne $pkType "" }}
@@ -858,13 +831,10 @@ func (repo *{{$ident}}Repo) Get(id {{$pkType}}, options ...*Options) (*{{.ModelP
 func (repo *{{$ident}}Repo) GetAll(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error) {
 	db := repo.applyConfiguredPreloads(repo.DB, repo.shouldPreload({{.Queries.GetAll.PreloadAll}}))
 	db = applyOptions(db, options...)
-
 	err = db.Find(&results).Error
-
 	if err != nil {
 		return nil, err
 	}
-
 	return
 }
 
@@ -882,12 +852,16 @@ func (repo *{{$ident}}Repo) Count(options ...*Options) (int64, error) {
 // GetPaginated retrieves a paginated list of users
 func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Options) (
 	*PaginatedResults[*{{.ModelPkgName}}.{{.Model}}], error) {
-
 	var results []*{{.ModelPkgName}}.{{.Model}}
 
 	// Page must be >= 1
 	if page < 1 {
 		page = 1
+	}
+
+	// pageSize must be > 0
+	if pageSize < 1 {
+		pageSize = 10
 	}
 
 	// Calculate offset and limit
@@ -902,11 +876,9 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Opt
 	if err := db.Model(&{{.ModelPkgName}}.{{.Model}}{}).Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
-
 	if err := db.Offset(offset).Limit(pageSize).Find(&results).Error; err != nil {
 		return nil, err
 	}
-
 	paginatedResults := &PaginatedResults[*{{.ModelPkgName}}.{{.Model}}]{
 		Page:     page,
 		PageSize: pageSize,
@@ -916,11 +888,8 @@ func (repo *{{$ident}}Repo) GetPaginated(page int, pageSize int, options ...*Opt
 		Count:      totalCount,
 		TotalPages: int64(math.Ceil(float64(totalCount) / float64(pageSize))),
 	}
-
 	return paginatedResults, nil
 }
-
-
 
 func (repo *{{$ident}}Repo) FindOne(options ...*Options) (*{{.ModelPkgName}}.{{.Model}}, error){
 	var {{$ident}} {{.ModelPkgName}}.{{.Model}}
@@ -934,12 +903,10 @@ func (repo *{{$ident}}Repo) FindOne(options ...*Options) (*{{.ModelPkgName}}.{{.
 
 func (repo *{{$ident}}Repo) FindMany(options ...*Options) (results []*{{.ModelPkgName}}.{{.Model}}, err error){
 	db := repo.applyConfiguredPreloads(repo.DB, repo.shouldPreload({{.Queries.FindMany.PreloadAll}}))
-	
 	db = applyOptions(db, options...)
 
 	var tmpResults []{{.ModelPkgName}}.{{.Model}}
 	err = db.Find(&tmpResults).Error
-
 	if err != nil{
 		return nil, err
 	}
@@ -948,10 +915,7 @@ func (repo *{{$ident}}Repo) FindMany(options ...*Options) (results []*{{.ModelPk
 	for i := range tmpResults {
 		results[i] = &tmpResults[i]
 	}
-	
 	return
 }
 
 {{ end }}
-
-

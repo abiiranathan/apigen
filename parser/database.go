@@ -22,7 +22,6 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, l
 	if logOut == nil{
 		logOut = os.Stdout
 	}
-
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		NowFunc: func() time.Time {
 			loc, err := time.LoadLocation(timezone)
@@ -38,7 +37,6 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, l
 				LogLevel: logLevel,
 			}),
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +46,6 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, l
 	if err != nil {
 		return nil, fmt.Errorf("ping(): %%v", err)
 	}
-
 	// Use a connection pool
 	err = setConnPool(db)
 	if err != nil {
@@ -59,11 +56,11 @@ func PostgresConnection(dsn string, timezone string, logLevel logger.LogLevel, l
 
 // ping checks the database connection by pinging the underlying SQL DB.
 func ping(db *gorm.DB) error {
-	rawConn, err := db.DB()
+	rawDB, err := db.DB()
 	if err != nil {
 		return err
 	}
-	return rawConn.Ping()
+	return rawDB.Ping()
 }
 
 // setConnPool configures the connection pool for the given GORM DB instance.
@@ -72,8 +69,8 @@ func setConnPool(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetMaxIdleConns(20)
+	sqlDB.SetMaxOpenConns(100)
 	return nil
 }
 

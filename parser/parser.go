@@ -5,6 +5,7 @@ package parser
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -33,9 +34,11 @@ var (
 	// modelHdrTmpl renders the package declaration and import block shared by
 	// every generated per-model service file.
 	modelHdrTmpl *template.Template
+
 	// modelBodyTmpl renders the CRUD method bodies for a single model, driven
 	// by the embedded services.gotmpl template.
 	modelBodyTmpl *template.Template
+
 	// mainSvcTmpl renders the aggregate Service struct that embeds every
 	// generated per-model service.
 	mainSvcTmpl *template.Template
@@ -165,9 +168,11 @@ const (
 	// skipTag is the doc-comment marker ("apigen:skip") that excludes a
 	// struct from service generation entirely.
 	skipTag = "apigen:skip"
+
 	// foreignKeyIdent is the GORM struct-tag substring identifying a
 	// belongs-to/has-one foreign key relation.
 	foreignKeyIdent = "foreignKey"
+
 	// many2manyIdent is the GORM struct-tag substring identifying a
 	// many-to-many relation.
 	many2manyIdent = "many2many"
@@ -267,174 +272,183 @@ func Parse(modelPkgs []string) ([]StructMeta, error) {
 	// packages.Load can report per-package errors (e.g. malformed source)
 	// without returning a top-level err. Surface those explicitly instead of
 	// silently generating services from a partially-parsed package.
-	var loadErrs []string
+	var loadErrs []error
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		for _, e := range pkg.Errors {
-			loadErrs = append(loadErrs, e.Error())
+			loadErrs = append(loadErrs, e)
 		}
 	})
 	if len(loadErrs) > 0 {
-		return nil, fmt.Errorf("errors loading packages: %s", strings.Join(loadErrs, "; "))
+		return nil, fmt.Errorf("errors loading packages: %v", errors.Join(loadErrs...))
 	}
 
-	var structSlice []StructMeta
+	// Allocate 1K for each package.
+	// Reduces frequent slice allocations.
+	structSlice := make([]StructMeta, 0, len(pkgs)*1*1024)
+
+	var wg sync.WaitGroup
+
 	for _, pkg := range pkgs {
+		// Process package file in parallel
 		for _, file := range pkg.Syntax {
-			for _, decl := range file.Decls {
-				genDecl, ok := decl.(*ast.GenDecl)
-				if !ok {
-					continue
-				}
-				for _, spec := range genDecl.Specs {
-					t, ok := spec.(*ast.TypeSpec)
+			wg.Go(func() {
+				for _, decl := range file.Decls {
+					genDecl, ok := decl.(*ast.GenDecl)
 					if !ok {
 						continue
 					}
-					stype, ok := t.Type.(*ast.StructType)
-					if !ok {
-						continue
-					}
-
-					meta := StructMeta{
-						Name:    t.Name.Name,
-						Package: pkg.PkgPath,
-						Fields:  make([]Field, 0, len(stype.Fields.List)),
-					}
-
-					// A skip directive may appear either on the TypeSpec's own
-					// doc comment (`// apigen:skip` directly above the type
-					// name in a grouped `type ( ... )` block) or on the
-					// enclosing GenDecl's doc comment (a lone `type X struct`
-					// declaration). Check both locations.
-					if t.Doc != nil {
-						for _, comment := range t.Doc.List {
-							if strings.Contains(comment.Text, skipTag) {
-								meta.Skip = true
-								break
-							}
+					for _, spec := range genDecl.Specs {
+						t, ok := spec.(*ast.TypeSpec)
+						if !ok {
+							continue
 						}
-					}
-					if !meta.Skip && genDecl.Doc != nil {
-						for _, comment := range genDecl.Doc.List {
-							if strings.Contains(comment.Text, skipTag) {
-								meta.Skip = true
-								break
-							}
+						stype, ok := t.Type.(*ast.StructType)
+						if !ok {
+							continue
 						}
-					}
 
-					for _, field := range stype.Fields.List {
-						var tagValue string
-						if field.Tag != nil {
-							tagValue = field.Tag.Value
+						meta := StructMeta{
+							Name:    t.Name.Name,
+							Package: pkg.PkgPath,
+							Fields:  make([]Field, 0, len(stype.Fields.List)),
 						}
-						isFK := strings.Contains(tagValue, foreignKeyIdent)
-						isManyToMany := strings.Contains(tagValue, many2manyIdent)
-						preload := isFK || isManyToMany
 
-						switch typ := field.Type.(type) {
-						case *ast.Ident:
-							for _, name := range field.Names {
-								if name.Name == "ID" {
-									meta.PKType = typ.Name
+						// A skip directive may appear either on the TypeSpec's own
+						// doc comment (`// apigen:skip` directly above the type
+						// name in a grouped `type ( ... )` block) or on the
+						// enclosing GenDecl's doc comment (a lone `type X struct`
+						// declaration). We check both locations.
+						if t.Doc != nil {
+							for _, comment := range t.Doc.List {
+								if strings.Contains(comment.Text, skipTag) {
+									meta.Skip = true
+									break
 								}
-								meta.Fields = append(meta.Fields, Field{
-									Name:     name.Name,
-									Parent:   meta.Name,
-									Tag:      tagValue,
-									Type:     typ.Name,
-									BaseType: typ.Name,
-									Preload:  preload,
-								})
 							}
-						case *ast.SelectorExpr:
-							fieldType := formatSelectorExpr(typ)
-							for _, name := range field.Names {
-								meta.Fields = append(meta.Fields, Field{
-									Name:     name.Name,
-									Parent:   meta.Name,
-									Tag:      tagValue,
-									Type:     fieldType,
-									BaseType: fieldType,
-									Preload:  preload,
-								})
+						}
+
+						if !meta.Skip && genDecl.Doc != nil {
+							for _, comment := range genDecl.Doc.List {
+								if strings.Contains(comment.Text, skipTag) {
+									meta.Skip = true
+									break
+								}
 							}
-						case *ast.ArrayType:
-							fieldType := formatArrayType(typ)
-							arrLen := getArrayLen(typ)
-							var arrType string
-							if arrLen == 0 {
-								arrType = "[]" + fieldType
-							} else {
-								arrType = fmt.Sprintf("[%d]%s", arrLen, fieldType)
+						}
+
+						for _, field := range stype.Fields.List {
+							var tagValue string
+							if field.Tag != nil {
+								tagValue = field.Tag.Value
 							}
-							for _, name := range field.Names {
-								meta.Fields = append(meta.Fields, Field{
-									Name:     name.Name,
-									Parent:   meta.Name,
-									Tag:      tagValue,
-									Type:     arrType,
-									BaseType: fieldType,
-									Preload:  preload,
-								})
-							}
-						case *ast.StarExpr:
-							switch t := typ.X.(type) {
+							isFK := strings.Contains(tagValue, foreignKeyIdent)
+							isManyToMany := strings.Contains(tagValue, many2manyIdent)
+							preload := isFK || isManyToMany
+
+							switch typ := field.Type.(type) {
 							case *ast.Ident:
 								for _, name := range field.Names {
+									if name.Name == "ID" {
+										meta.PKType = typ.Name
+									}
 									meta.Fields = append(meta.Fields, Field{
 										Name:     name.Name,
 										Parent:   meta.Name,
 										Tag:      tagValue,
-										Type:     "*" + t.Name,
-										BaseType: t.Name,
+										Type:     typ.Name,
+										BaseType: typ.Name,
 										Preload:  preload,
 									})
 								}
 							case *ast.SelectorExpr:
-								identName := formatSelectorExpr(t)
+								fieldType := formatSelectorExpr(typ)
 								for _, name := range field.Names {
 									meta.Fields = append(meta.Fields, Field{
 										Name:     name.Name,
-										BaseType: identName,
 										Parent:   meta.Name,
 										Tag:      tagValue,
-										Type:     identName,
+										Type:     fieldType,
+										BaseType: fieldType,
 										Preload:  preload,
 									})
 								}
 							case *ast.ArrayType:
-								if ident, ok := t.Elt.(*ast.Ident); ok {
-									arrLen := getArrayLen(t)
-									var arrType string
-									if arrLen == 0 {
-										arrType = "*[]" + ident.Name
-									} else {
-										arrType = fmt.Sprintf("*[%d]%s", arrLen, ident.Name)
-									}
+								fieldType := formatArrayType(typ)
+								arrLen := getArrayLen(typ)
+								var arrType string
+								if arrLen == 0 {
+									arrType = "[]" + fieldType
+								} else {
+									arrType = fmt.Sprintf("[%d]%s", arrLen, fieldType)
+								}
+								for _, name := range field.Names {
+									meta.Fields = append(meta.Fields, Field{
+										Name:     name.Name,
+										Parent:   meta.Name,
+										Tag:      tagValue,
+										Type:     arrType,
+										BaseType: fieldType,
+										Preload:  preload,
+									})
+								}
+							case *ast.StarExpr:
+								switch t := typ.X.(type) {
+								case *ast.Ident:
 									for _, name := range field.Names {
 										meta.Fields = append(meta.Fields, Field{
 											Name:     name.Name,
-											BaseType: ident.Name,
 											Parent:   meta.Name,
 											Tag:      tagValue,
-											Type:     arrType,
+											Type:     "*" + t.Name,
+											BaseType: t.Name,
 											Preload:  preload,
 										})
 									}
+								case *ast.SelectorExpr:
+									identName := formatSelectorExpr(t)
+									for _, name := range field.Names {
+										meta.Fields = append(meta.Fields, Field{
+											Name:     name.Name,
+											BaseType: identName,
+											Parent:   meta.Name,
+											Tag:      tagValue,
+											Type:     identName,
+											Preload:  preload,
+										})
+									}
+								case *ast.ArrayType:
+									if ident, ok := t.Elt.(*ast.Ident); ok {
+										arrLen := getArrayLen(t)
+										var arrType string
+										if arrLen == 0 {
+											arrType = "*[]" + ident.Name
+										} else {
+											arrType = fmt.Sprintf("*[%d]%s", arrLen, ident.Name)
+										}
+										for _, name := range field.Names {
+											meta.Fields = append(meta.Fields, Field{
+												Name:     name.Name,
+												BaseType: ident.Name,
+												Parent:   meta.Name,
+												Tag:      tagValue,
+												Type:     arrType,
+												Preload:  preload,
+											})
+										}
+									}
 								}
-								// Note: a *[N]pkg.Type or nested *[N][]T pointer-to-array
-								// element is intentionally not handled, matching the
-								// original scope of this parser; such fields are simply
-								// omitted from meta.Fields rather than causing a panic.
 							}
 						}
+
+						structSlice = append(structSlice, meta)
 					}
-					structSlice = append(structSlice, meta)
 				}
-			}
+
+			})
 		}
 	}
+
+	wg.Wait()
 	return structSlice, nil
 }
 

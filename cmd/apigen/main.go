@@ -16,6 +16,9 @@ import (
 	"github.com/abiiranathan/goflag"
 )
 
+//go:embed apigen.toml
+var defaultConfig []byte
+
 var (
 	apigenConfigPath = "apigen.toml" // Path to the config file.
 
@@ -32,9 +35,6 @@ var (
 	dbtx                bool     // Generate DBTX interface file.
 )
 
-//go:embed apigen.toml
-var defaultConfig []byte
-
 func defineFlags(root *goflag.CLI) {
 	root.FilePath("config", "c", &apigenConfigPath, "Path to config filename")
 
@@ -50,7 +50,7 @@ func defineFlags(root *goflag.CLI) {
 		String("table", "t", &tableOverride, "Override table name. Default is snake_case plural of model").
 		StringSlice("select", "s", &selectFields, "Comma-seperated field names to include (default: all)").
 		StringSlice("filter", "f", &filterFields, "Custom filters as \"Column:Op:GoType\" (repeatable, comma-separated) e.g. \"Age:>:int,Name:ILIKE:string\"").
-		StringSlice("omit", "o", &omitFields, "Comma-separated field names to exclude").
+		StringSlice("omit", "x", &omitFields, "Comma-separated field names to exclude").
 		StringSlice("nullable", "n", &nullableFilter, "Same as -filter but wraps in nil check (pointer param) e.g. \"Age:>:int\" becomes func param \"age *int\"").
 		Int("rows", "c", &preloadRows, "Estimated result-row count; preallocates the Query<Model>s").
 		Bool("dbtx", "d", &dbtx, "Write the DBTX interface instead of a model's queries. DBTX is package-level, not per-model: generate it once into the same output package as your Query<Model> files")

@@ -48,6 +48,7 @@ func GenerateGORMServices(cfg *config.Config, structMetaData []StructMeta) (err 
 	for name := range files {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	for _, name := range names {
