@@ -282,9 +282,10 @@ func Parse(modelPkgs []string) ([]StructMeta, error) {
 		return nil, fmt.Errorf("errors loading packages: %v", errors.Join(loadErrs...))
 	}
 
-	// Allocate 1K for each package.
-	// Reduces frequent slice allocations.
-	structSlice := make([]StructMeta, 0, len(pkgs)*1*1024)
+	var (
+		mu          sync.Mutex
+		structSlice = make([]StructMeta, 0, len(pkgs)*1*1024)
+	)
 
 	var wg sync.WaitGroup
 
@@ -440,7 +441,9 @@ func Parse(modelPkgs []string) ([]StructMeta, error) {
 							}
 						}
 
+						mu.Lock()
 						structSlice = append(structSlice, meta)
+						mu.Unlock()
 					}
 				}
 
