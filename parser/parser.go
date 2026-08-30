@@ -662,6 +662,11 @@ func generateGORMServiceFiles(structs []StructMeta, cfg *config.Config) (map[str
 // the completed file map. Split out of generateGORMServiceFiles so the
 // zero-model fast path and the worker-pool path share identical base-service
 // generation logic instead of duplicating it.
+//
+// modelNames is sorted alphabetically before rendering so the generated
+// base_service.go (embedded service fields and NewService assignments) is
+// byte-for-byte stable across runs, regardless of the non-deterministic
+// order in which Parse's concurrent AST walk discovers structs.
 func finalizeBaseService(files map[string][]byte, modelNames []string, cfg *config.Config) (map[string][]byte, error) {
 	baseBuf := bufferPool.Get().(*bytes.Buffer)
 	baseBuf.Reset()
@@ -677,8 +682,11 @@ func finalizeBaseService(files map[string][]byte, modelNames []string, cfg *conf
 		return nil, fmt.Errorf("error executing base service body: %w", err)
 	}
 
-	services := make([]string, 0, len(modelNames))
-	for _, m := range modelNames {
+	sortedNames := slices.Clone(modelNames)
+	slices.Sort(sortedNames)
+
+	services := make([]string, 0, len(sortedNames))
+	for _, m := range sortedNames {
 		if !slices.Contains(cfg.Models.Skip, m) {
 			services = append(services, m)
 		}
